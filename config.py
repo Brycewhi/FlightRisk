@@ -1,12 +1,14 @@
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from the .env file
+# Separates configuration from code logic.
+# Load environment variables from the .env file for security.
 load_dotenv()
 
-# Fetch the key
+# Keep API keys centralized for easier maintnence.
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
-# Validation: Stop the app if the key is missing
-if not GOOGLE_API_KEY:
-    raise ValueError("No GOOGLE_API_KEY found.")
+# Check that the keys exist before execution.
+if not GOOGLE_API_KEY or not OPENWEATHER_API_KEY:
+    print("Configuration Error: One or more API keys are missing in the .env file.")
