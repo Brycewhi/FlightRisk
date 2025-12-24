@@ -5,7 +5,7 @@ import config
 class TrafficEngine:
     """
     Class to interface with Google Maps Directions API.
-    Designed to extract geographic data and travel time variance for risk modeling.
+    Designed to extract geospatial data and travel time variance for risk modeling.
     """
     def __init__(self):
         # Initialize with credentials from config.
@@ -24,7 +24,7 @@ class TrafficEngine:
         Returns: 
             Dict containing raw seconds (for computation) and polyline (for mapping).
         """
-        # Parameter configuration for live traffic analysis
+        # Parameter configuration for live traffic analysis.
         params = {
             "origin": origin,
             "destination": destination,
@@ -53,20 +53,20 @@ class TrafficEngine:
                 "seconds": leg.get('duration_in_traffic', leg['duration'])['value'],
                 "human_readable": leg.get('duration_in_traffic', leg['duration'])['text'],
                 "distance_meters": leg['distance']['value'],
-                "polyline": route['overview_polyline']['points'], # Captured for weather integration
+                "polyline": route['overview_polyline']['points'], # Captured for weather integration.
                 "model_used": model
             }
         except Exception as e:
-            # Log system level errors
+            # Log system level errors.
             print(f"Traffic System System Error: {e}")
             return None
 
-# Local Unit Test Block
+# Local Unit Test Block.
 # Only executed if the file is run directly, not when imported.
 if __name__ == "__main__":
     engine = TrafficEngine()
     
-    # Test coordinates
+    # Test coordinates.
     home = "Stony Brook University"
     jfk = "JFK Airport"
     

@@ -62,7 +62,7 @@ class WeatherEngine:
             return route_weather_report
 
         except Exception as e:
-            # Catching decoding errors or network timeouts
+            # Catching decoding errors or network timeouts.
             print(f"Weather Engine System Error: {e}")
             return None
         
@@ -70,7 +70,7 @@ class WeatherEngine:
 if __name__ == "__main__":
     test_engine = WeatherEngine()
     
-    # This is a sample encoded polyline string (represents a short path)
+    # This is a sample encoded polyline string (represents a short path).
     # We use this to test if our decoding and sampling logic works in isolation.
     sample_polyline = r"uzpwFvps|U" 
     
