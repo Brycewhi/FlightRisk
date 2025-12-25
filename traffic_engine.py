@@ -12,7 +12,7 @@ class TrafficEngine:
         self.api_key = config.GOOGLE_API_KEY
         self.base_url = "https://maps.googleapis.com/maps/api/directions/json"
 
-    def get_route(self, origin: str, destination:str, model: str = "best_guess") -> dict:
+    def get_route(self, origin: str, destination:str, model: str = "best_guess", departure_time = "now") -> dict:
         """
         Calculates trip duration using probabalistic traffic models.
 
@@ -24,13 +24,19 @@ class TrafficEngine:
         Returns: 
             Dict containing raw seconds (for computation) and polyline (for mapping).
         """
+        # Google API requires integer for timestamps
+        if isinstance(departure_time, (int, float)):
+            departure_time = int(departure_time)
+            
         # Parameter configuration for live traffic analysis.
         params = {
             "origin": origin,
             "destination": destination,
-            "departure_time": "now", # Required for live traffic data.
+            "departure_time": departure_time, # Timestamp
             "traffic_model": model, # Defines risk profile for the duration.
-            "key": self.api_key
+            "key": self.api_key,
+            "mode": "driving"
+
         }
         try:
             # Execute the network request

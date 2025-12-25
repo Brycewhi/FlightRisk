@@ -1,7 +1,7 @@
 class RiskEngine:
     def __init__(self):
         # Values representing a multiplier of how much each weather condition impacts traffic (Based on general Dept of Transportation stats).
-        self.weather_multipiers = {
+        self.weather_multipliers = {
             "Clear": 1.0,
             "Clouds": 1.05,
             "Mist": 1.10,
@@ -31,7 +31,7 @@ class RiskEngine:
             condition = point_data.get('condition', 'Clear')
             
             # Weighted calculation of weather impact.
-            impact = self.weather_multipiers.get(condition, 1.0)
+            impact = self.weather_multipliers.get(condition, 1.0)
             total_multiplier += impact * self.weights[model_key]
             
         return round(total_multiplier, 2)
@@ -61,7 +61,7 @@ class RiskEngine:
         adjusted_eta = pess * impact
         
         # Determine model pediction confidence.
-        confidence = self.calculate_confidence(opt, best_guess, pess)
+        confidence = self.calculate_confidence(opt, pess, best_guess)
 
         # Calculate remaining time to make flight.
         remaining = buffer_mins - adjusted_eta

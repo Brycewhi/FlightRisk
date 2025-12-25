@@ -21,7 +21,6 @@ class WeatherEngine:
         try:
             # Decode the compressed polyline into a list of (Lat, Lon) coordinates.
             coordinates = polyline.decode(encoded_polyline)
-
             if not coordinates:
                 return None
             
@@ -45,21 +44,23 @@ class WeatherEngine:
                     "units": "imperial" 
                 }
 
-                response = requests.get(self.base_url, params=params)
-                data = response.json()
-                
+                response = requests.get(self.base_url, params=params)                
                 if response.status_code == 200:
+                    data = response.json()
+                    # Ensure weather list is not empty
+                    weather_main = data['weather'][0] if data.get('weather') else {'main': 'Clear', 'description': 'no data'}
+
                     # Store key metrics for the Risk Engine.
                     route_weather_report[label] = {
                         "temp": data['main']['temp'],
-                        "condition": data['weather'][0]['main'], # e.g. 'Rain', 'Snow'
-                        "description": data['weather'][0]['description'],
+                        "condition": weather_main['main'], # e.g. 'Rain', 'Snow'
+                        "description": weather_main['description'],
                         "location_name": data.get('name', label)
                     }
                 else:
                     print(f"Weather API Error at {label}: {data.get('message')}")
 
-            return route_weather_report
+            return route_weather_report if route_weather_report else None
 
         except Exception as e:
             # Catching decoding errors or network timeouts.
