@@ -1,0 +1,7 @@
+requests
+polyline
+python-dotenv
+numpy
+pandas
+scipy
+matplotlib
