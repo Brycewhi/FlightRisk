@@ -58,7 +58,7 @@ class WeatherEngine:
                         "location_name": data.get('name', label)
                     }
                 else:
-                    print(f"Weather API Error at {label}: {data.get('message')}")
+                    print(f"Weather API Error at {label}: Status {response.status_code}")
 
             return route_weather_report if route_weather_report else None
 

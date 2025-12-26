@@ -55,30 +55,41 @@ def display_dashboard(origin, dest, buffer, report, departure_time):
     # ANSI Color Codes.
     BLUE, CYAN, RESET = "\033[94m", "\033[96m", "\033[0m"
     BOLD, RED, GREEN = "\033[1m", "\033[91m", "\033[92m"
+    YELLOW = "\033[93m"
     
     color = RED if report['risk'] in ["HIGH", "CRITICAL"] else GREEN
     
     print("\n" + "="*60)
-    print(f"{BOLD}FLIGHT-RISK TERMINAL v1.0{RESET}".center(68))
+    print(f"{BOLD}FLIGHT-RISK TERMINAL v2.0 (STOCHASTIC){RESET}".center(68))
     print("="*60)
     print(f" ROUTE:     {origin} -> {dest}")
     print(f" DEPARTURE: {readable_time} (Leaving Later)")
     print(f" WINDOW:    {buffer} minutes to departure")
     print("-" * 60)
     
-    print(f"{BOLD}ANALYSIS RESULTS:{RESET}")
-    print(f"  - Weather Penalty:  {report['multiplier']}x")
-    print(f"  - Adjusted ETA:     {report['adjusted_eta']} mins")
-    print(f"  - Model Confidence: {report['confidence']}%")
-    print(f"  - Safety Margin:    {report['buffer']} mins remaining")
+    print(f"{BOLD}STATISTICAL ANALYSIS RESULTS:{RESET}")
+    print(f"  - Weather Multiplier: {report['multiplier']}x")
+    print(f"  - Avg Arrival Time:   {report['avg_eta']} mins")
+    print(f"  - 95% Safe Arrival:   {report['p95_eta']} mins")
+    print(f"  - Volatility (Std): {report['std_dev']} mins")
     
+    # Highlight success prob metric. 
+    prob_color = GREEN if report['success_probability'] > 90 else YELLOW if report['success_probability'] > 75 else RED
+    print(f"  - Success Probability: {BOLD}{prob_color}{report['success_probability']}%{RESET}")
+
+    # Calculate Safety Margin (based on P95).
+    print(f"  - Safety Margin:      {report['buffer_remaining']} mins remaining (95% CI)")
+    
+    # Determine final risk.
     print("-" * 60)
     print(f" FINAL STATUS: {BOLD}{color}{report['risk']}{RESET}")
     
+    # Recommendations based on probability.
     if report['risk'] != "LOW":
-        print(f"{RED}{BOLD} RECOMMENDATION: Adjust departure time immediately.{RESET}")
+        print(f"{RED}{BOLD} RECOMMENDATION: Risk of missing flight is {100 - report['success_probability']}%.{RESET}")
+        print(f"{RED} ADVICE: Leave {abs(int(report['buffer_remaining'])) + 15} mins earlier than planned.{RESET}")
     else:
-        print(f"{GREEN} RECOMMENDATION: Departure window is safe.{RESET}")
+        print(f"{GREEN} RECOMMENDATION: High statistical probability of success.{RESET}")
     print("="*60 + "\n")
 
 if __name__ == "__main__":

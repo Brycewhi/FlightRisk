@@ -64,7 +64,7 @@ class TrafficEngine:
             }
         except Exception as e:
             # Log system level errors.
-            print(f"Traffic System System Error: {e}")
+            print(f"Traffic System Error: {e}")
             return None
 
 # Local Unit Test Block.

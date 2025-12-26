@@ -14,10 +14,16 @@ def simulate_monte_carlo(opt, best, pess, weather_impact, weather_type="Clear"):
     
     # Volatility increases depending on weather severity.
     volatility_map = {
-        "Clear": 0.02, 
-        "Rain": 0.07, 
-        "Snow": 0.12, 
-        "Thunderstorm": 0.18
+        "Clear": 0.02,
+        "Clouds": 0.03,
+        "Drizzle": 0.05,
+        "Mist": 0.08,
+        "Fog": 0.10,
+        "Haze": 0.10,
+        "Rain": 0.12,
+        "Thunderstorm": 0.20,
+        "Snow": 0.25,
+        "Squall": 0.40
     }
     current_vol = volatility_map.get(weather_type, 0.05)
 
@@ -29,7 +35,7 @@ def simulate_monte_carlo(opt, best, pess, weather_impact, weather_type="Clear"):
     results = traffic_samples * weather_samples
     
     # Analyze with Pandas.
-    df = pd.DataFrame(results, columns=['travel_time'])
+    df = pd.Series(results)
     
     # Calculate key risk metrics.
     avg = df['travel_time'].mean()
