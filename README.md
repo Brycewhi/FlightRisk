@@ -1,38 +1,49 @@
-# ✈️ FlightRisk (v1.0)
-### *Because "ETA" isn't the same thing as "Actually making your flight."*
+# ✈️ FlightRisk (v2.0)
+### *Stochastic Travel Intelligence for the High-Stakes Traveler.*
 
-I built this because I’m tired of navigation apps giving me a "best-case scenario" time when I have a $300 flight on the line. I wanted a tool that treats travel time as a **distribution of risks** rather than a single number.
+![Risk Profile Visualization](risk_profile_v2.png)
+*> Figure 1: Real-time Monte Carlo simulation (N=1,000) showing the Probability Density Function (PDF) of arrival times against a strict flight departure deadline.*
 
-## 🧠 How it works (The Logic)
+I built this because "Average ETA" is a lie. When you have a $300 flight on the line, you don't care about the *average* time; you care about the *worst-case* scenario. **FlightRisk** replaces static navigation estimates with a probabilistic distribution of risks.
 
-The "brain" of this project is a multi-layered risk engine that combines two main variables:
+## 🧠 How it works (The Math)
 
-### 1. The Traffic "Sandwich"
-Instead of just asking Google "How long?", I fetch the **Optimistic**, **Best Guess**, and **Pessimistic** models simultaneously. 
-* If the gap between "Optimistic" and "Pessimistic" is huge, the app flags a **Low Confidence** score. 
-* This captures "volatility"—if one accident on the LIE changes your trip by 40 minutes, you need to know that before you leave.
+The "brain" of this project is a **Monte Carlo Simulation Engine** that models uncertainty using distinct statistical distributions:
 
-### 2. Spatial Weather Sampling
-Weather doesn't just happen at your house; it happens on the road. This engine decodes the route's **G-Maps Polyline** into GPS coordinates and samples the weather at:
-* **The Start** (Origin)
-* **The Midpoint** (Halfway)
-* **The Destination** (Airport)
+### 1. Stochastic Traffic Modeling (Triangular Distribution)
+Traffic isn't random; it's bounded. I use the **Google Directions API** to fetch three distinct data points: *Optimistic*, *Best Guess*, and *Pessimistic* duration.
+* The engine treats these as `left`, `mode`, and `right` parameters for a **Triangular Distribution**.
+* It generates **1,000 unique trip scenarios** to model the realistic variance of road conditions.
 
-**The Logic:** I’ve weighted the impact so that bad weather at the **Destination** carries a 65% risk weight. Why? Because if you hit a storm 5 minutes from JFK, you have zero "buffer time" left to recover from the delay.
+### 2. Weather Volatility (Normal Distribution)
+Weather impact is non-linear. The system performs **Spatial Sampling** along the decoded polyline (Origin → Midpoint → Airport) using the **OpenWeather API**.
+* Route segments are weighted (Destination weather carries 65% risk weight).
+* Weather severity introduces a **Gaussian noise factor** (Normal Distribution) to the traffic simulation, expanding the variance during storms.
+
+### 3. The Result: 95% Confidence (P95)
+Instead of a single time, the app calculates the **95th Percentile (P95)** arrival time.
+* *Translation:* "In 950 out of 1,000 simulated universes, you arrive by this time."
+* This effectively quantifies the "Tail Risk" of missing your flight.
 
 ---
 
 ## 🛠 Tech Stack
-* **Python 3.10** (Modular engine structure)
-* **Google Directions API** (Traffic modeling & polylines)
-* **OpenWeather API** (Spatial sampling)
-* **Polyline Library** (For coordinate decoding)
+
+**Engineering & APIs:**
+* **Python 3.10** (Modular OOP Architecture)
+* **Google Directions API** (Traffic modeling & Polyline decoding)
+* **OpenWeather API** (Spatial environmental sampling)
+
+**Data Science & Visualization:**
+* **NumPy** (Vectorized simulation generation)
+* **Pandas** (Statistical aggregation)
+* **Seaborn & Matplotlib** (Kernel Density Estimation & plotting)
 
 ---
 
 ## 🚦 Getting Started
 
-1. **Clone it:** `git clone https://github.com/YOUR_USERNAME/FlightRisk.git`
+1. **Clone it:** `git clone https://github.com/Brycewhi/FlightRisk.git`
 2. **Setup venv:** `source venv/bin/activate`
 3. **Install:** `pip install -r requirements.txt`
 4. **Config:** Throw your API keys into `config.py` (or use a `.env`).
@@ -40,11 +51,21 @@ Weather doesn't just happen at your house; it happens on the road. This engine d
 
 ---
 
-## 🚧 Status & What's Next
-**Phase 1 (Complete):**
-- [x] Multi-model traffic integration.
-- [x] Weighted weather impact logic.
-- [x] Future-dated scheduling (Unix timestamps).
-- [x] Terminal Dashboard UI.
+## 🚧 Status & Whats's Next
 
-**Phase 2 (Current):** Moving from deterministic "labels" to **Monte Carlo Simulations**. I'm currently working on a statistical layer using `NumPy` to run 1,000 trip iterations to provide a "Probability of Arrival" percentage based on historical variance.
+### Phase 1: The Foundation [COMPLETED ✅]
+- [x] Environment setup and Google Maps API integration.
+- [x] OpenWeather API integration and Polyline decoding.
+- [x] Static Dashboard for base risk calculations.
+
+### Phase 2: Stochastic Intelligence [COMPLETED ✅]
+- [x] **Statistical Engine:** Implemented Monte Carlo simulations (1,000 iterations).
+- [x] **Math:** Fused Triangular (Traffic) and Normal (Weather) distributions.
+- [x] **Visualizer:** Added Matplotlib/Seaborn KDE plots to visualize the "Bell Curve" of risk.
+- [x] **Confidence Intervals:** Implemented P95 arrival time analysis.
+
+### Phase 3: Real-World Data Fusion [UPCOMING 🔄]
+- [ ] **TSA Logistics:** Model Curb-to-Gate time as a third random variable.
+- [ ] **Flight Tracking:** Integrate live flight status to dynamically adjust deadlines.
+- [ ] **Gamma Distributions:** Use Gamma math for flight delays (modeling "long-tail" events).
+- [ ] **Streamlit UI:** Move from the Terminal to a browser-based interactive dashboard.
