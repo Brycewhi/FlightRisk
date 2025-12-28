@@ -95,7 +95,8 @@ class RiskEngine:
             "buffer_remaining": round(safety_buffer, 1),
             "multiplier": impact_mean,
             # Risk is based on probability, not just one number.
-            "risk": "CRITICAL" if success_prob < 75 else "HIGH" if success_prob < 90 else "LOW"
+            "risk": "CRITICAL" if success_prob < 75 else "HIGH" if success_prob < 90 else "LOW",
+            "raw_data": df.tolist() # Convert series back to list for visualizer 
         }
     
 # Local Unit Test Block.

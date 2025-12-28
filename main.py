@@ -3,6 +3,7 @@ from traffic_engine import TrafficEngine
 from weather_engine import WeatherEngine
 from risk_engine import RiskEngine
 from datetime import datetime, timedelta
+from visualizer import Visualizer
 
 def get_timestamp(days=0, hours=0, minutes=0):
     # Generates a Unix timestamp for any point in the future. e.g. get_timestamp(days=2, hours=5) -> 2 days and 5 hours from now
@@ -44,6 +45,11 @@ def run_assessment(origin, destination, buffer_mins):
 
         # Display dashboard
         display_dashboard(origin, destination, buffer_mins, final_report, scheduled_time)
+
+        # Generate distribution of arrival times
+        print(f"\n\033[96m[*] Generating Risk Profile Graph...\033[0m")
+        viz = Visualizer()
+        viz.plot_risk_profile(simulated_times=final_report['raw_data'], deadline=buffer_mins, p95_time=final_report['p95_eta'])
    
     except Exception as e:
         print(f"\n\033[91m[!] CRITICAL ERROR: {e}\033[0m")
@@ -63,15 +69,15 @@ def display_dashboard(origin, dest, buffer, report, departure_time):
     print(f"{BOLD}FLIGHT-RISK TERMINAL v2.0 (STOCHASTIC){RESET}".center(68))
     print("="*60)
     print(f" ROUTE:     {origin} -> {dest}")
-    print(f" DEPARTURE: {readable_time} (Leaving Later)")
-    print(f" WINDOW:    {buffer} minutes to departure")
+    print(f" DEPARTURE: {readable_time}")
+    print(f" WINDOW:    {buffer} minutes to flight departure")
     print("-" * 60)
     
     print(f"{BOLD}STATISTICAL ANALYSIS RESULTS:{RESET}")
     print(f"  - Weather Multiplier: {report['multiplier']}x")
     print(f"  - Avg Arrival Time:   {report['avg_eta']} mins")
     print(f"  - 95% Safe Arrival:   {report['p95_eta']} mins")
-    print(f"  - Volatility (Std): {report['std_dev']} mins")
+    print(f"  - Volatility (Std):    {report['std_dev']} mins")
     
     # Highlight success prob metric. 
     prob_color = GREEN if report['success_probability'] > 90 else YELLOW if report['success_probability'] > 75 else RED
@@ -94,5 +100,5 @@ def display_dashboard(origin, dest, buffer, report, departure_time):
 
 if __name__ == "__main__":
     # Test Case
-    run_assessment("Stony Brook University, NY", "JFK Airport, NY", 120)
+    run_assessment("Roosevelt Field Mall, NY", "JFK Airport, NY", 80)
 
