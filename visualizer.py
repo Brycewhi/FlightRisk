@@ -27,7 +27,7 @@ class Visualizer:
 
         # Formatting.
         plt.title("Travel Time Probability Distribution (Monte Carlo)", fontsize=15)
-        plt.xlabel("Minutes from Departure", fontsize=12)
+        plt.xlabel("Travel Time", fontsize=12)
         plt.ylabel("Frequency of Outcomes", fontsize=12)
         plt.legend()
 

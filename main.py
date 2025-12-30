@@ -149,4 +149,4 @@ def display_dashboard(origin, dest, buffer, report, departure_time):
 
 if __name__ == "__main__":
     # Test Case
-    run_assessment("3160 Skillman Ave, Oceanside, NY", "JFK Airport, NY", 120)
+    run_assessment("3160 Skillman Ave, Oceanside NY", "JFK", 150)

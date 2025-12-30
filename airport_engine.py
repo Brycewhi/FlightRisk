@@ -24,11 +24,11 @@ class AirportEngine:
         # Returns standard TSA line (avg, scale) based on tier.
         tier = self._get_tier(airport_code)
         if tier == 1:
-            return 35, 6.0  # High chaos.
+            return 25, 4.0  # High chaos.
         elif tier == 2:
-            return 20, 3.0  # Medium chaos.
+            return 15, 2.5  # Medium chaos.
         else:
-            return 12, 1.5  # Low chaos.
+            return 10, 1.5  # Low chaos.
 
     def _get_time_multiplier(self, dt_object):
         # Returns a multiplier based on hour of day.
@@ -37,15 +37,15 @@ class AirportEngine:
         
         # Morning Rush (Business travelers + Early flights).
         if 5 <= hour < 9:
-            return 1.4
+            return 1.3
         
         # Evening Rush (Post-work + International departures).
         elif 15 <= hour < 19:
-            return 1.3
+            return 1.2
         
         # The quicker times (Mid-day or Late Night).
         elif (10 <= hour < 14) or (hour >= 21):
-            return 0.8
+            return 0.7
             
         # Standard rate.
         else:
@@ -61,15 +61,15 @@ class AirportEngine:
         
         # Weekend Penalty (Friday & Sunday are heaviest).
         if day == 4 or day == 6: 
-            multiplier *= 1.2
+            multiplier *= 1.15
             
         # Mid-Week Bonus (Tuesday & Wednesday are lightest).
         if day == 1 or day == 2:
-            multiplier *= 0.9
+            multiplier *= 0.85
             
         # Holiday Season Penalty (Summer/Nov/Dec).
         if month in [6,7,8,11,12]:
-            multiplier *= 1.15
+            multiplier *= 1.1
             
         return multiplier
 
@@ -83,11 +83,11 @@ class AirportEngine:
         
         # Base stats for Bag Drop lines.
         if tier == 1:
-            avg, scale = 25, 5.0 # Big hubs have chaotic bag lines.
+            avg, scale = 18, 4.0 # Big hubs have chaotic bag lines.
         elif tier == 2:
-            avg, scale = 15, 3.0
+            avg, scale = 10, 2.0
         else:
-            avg, scale = 8, 2.0  # Regional is quick.
+            avg, scale = 5, 1.0  # Regional is quick.
 
         # Apply time multipliers (Holidays = longer bag lines).
         if epoch_time:
@@ -121,8 +121,8 @@ class AirportEngine:
 
         # Apply TSA PreCheck Reduction.
         if is_precheck:
-            avg *= 0.4
-            scale *= 0.5
+            avg *= 0.35
+            scale *= 0.4
             
         # Generate Gamma Distribution
         # Mean = Shape * Scale -> Shape = Mean / Scale
@@ -137,12 +137,12 @@ class AirportEngine:
         tier = self._get_tier(airport_code)
         
         if tier == 1:
-            # JFK/ATL/DEN: You often take a train or walk 1 mile.
-            # Avg: 15 mins, Std Dev: 5 mins.
-            return np.random.normal(15, 5, iterations)
+            # JFK/ATL/LAX: You often take a train or walk 1 mile.
+            # Avg: 12 mins, Std Dev: 5 mins.
+            return np.random.normal(12, 5, iterations)
         elif tier == 2:
-            # BUR/PBI: Medium walk. Avg: 8 mins.
-            return np.random.normal(8, 3, iterations)
+            # BUR/PBI: Medium walk. Avg: 7 mins.
+            return np.random.normal(7, 2, iterations)
         else:
             # ISP: The gate is right there. Avg: 3 mins.
             return np.random.normal(3, 1, iterations)

@@ -6,26 +6,26 @@ class RiskEngine:
         # Values representing a multiplier of how much each weather condition impacts traffic (Based on general Dept of Transportation stats).
         self.weather_multipliers = {
             "Clear": 1.0,
-            "Clouds": 1.05,
-            "Mist": 1.10,
-            "Drizzle": 1.15,
-            "Fog": 1.20,
-            "Rain": 1.25,
-            "Thunderstorm": 1.40,
-            "Snow": 1.50
+            "Clouds": 1.0,
+            "Mist": 1.05,
+            "Drizzle": 1.08,
+            "Fog": 1.15,
+            "Rain": 1.2,
+            "Thunderstorm": 1.35,
+            "Snow": 1.45
         }
         # Volatility mapping for Normal Distribution.
         self.volatility_map = {
-            "Clear": 0.02,
-            "Clouds": 0.03,
-            "Drizzle": 0.05,
-            "Mist": 0.08,
-            "Fog": 0.10,
-            "Haze": 0.10,
-            "Rain": 0.12,
-            "Thunderstorm": 0.20,
-            "Snow": 0.25,
-            "Squall": 0.40
+            "Clear": 0.01,
+            "Clouds": 0.02,
+            "Drizzle": 0.04,
+            "Mist": 0.05,
+            "Fog": 0.08,
+            "Haze": 0.08,
+            "Rain": 0.10,
+            "Thunderstorm": 0.15,
+            "Snow": 0.20,
+            "Squall": 0.25
         }
         # Weights representing the severity of weather impact on each point on route.
         # Priority given to destination as there is no time to cut down on at the end.
@@ -70,13 +70,17 @@ class RiskEngine:
 
         # The Monte Carlo Sim.
         iterations = 1000
+
         # Traffic uses Triangular distribution, Weather uses Normal distribution (Bell Curve)
-        traffic_samples = np.random.triangular(opt, best, pess, iterations)
-        weather_samples = np.random.normal(impact_mean, volatility, iterations)
-        
         # Drive Time = Raw Traffic * Weather Multiplier
+        traffic_samples = np.random.triangular(opt, best, pess, iterations)
+        if impact_mean > 1.02: 
+            weather_samples = np.random.normal(impact_mean, volatility, iterations)
+            drive_times = traffic_samples * weather_samples
+        else:
+            drive_times = traffic_samples
+
         # Total Time = Drive Time + Airport Processing (Bags + Security + Walk)
-        drive_times = traffic_samples * weather_samples
         total_trip_times = drive_times + airport_delays
         df = pd.Series(total_trip_times)
 
