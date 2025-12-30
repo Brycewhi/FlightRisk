@@ -31,7 +31,7 @@ class Visualizer:
         plt.ylabel("Frequency of Outcomes", fontsize=12)
         plt.legend()
 
-        # Save visulization for GitHub.
+        # Save visualization for GitHub.
         plt.savefig("risk_profile_v2.png", dpi=300)
         print("[*] Dashboard saved as risk_profile_v2.png")
         plt.show()

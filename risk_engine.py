@@ -57,7 +57,7 @@ class RiskEngine:
 
         return round(total_multiplier, 2), primary_condition
     
-    def evaluate_trip(self, traffic_results, weather_report, buffer_mins=120):
+    def evaluate_trip(self, traffic_results, weather_report, airport_delays, buffer_mins=120):
         # Setup Data.
         np.random.seed(16)
         impact_mean, condition = self.calculate_weather_impact(weather_report)
@@ -74,9 +74,11 @@ class RiskEngine:
         traffic_samples = np.random.triangular(opt, best, pess, iterations)
         weather_samples = np.random.normal(impact_mean, volatility, iterations)
         
-        # Hadamard Product 
-        simulated_times = traffic_samples * weather_samples
-        df = pd.Series(simulated_times)
+        # Drive Time = Raw Traffic * Weather Multiplier
+        # Total Time = Drive Time + Airport Processing (Bags + Security + Walk)
+        drive_times = traffic_samples * weather_samples
+        total_trip_times = drive_times + airport_delays
+        df = pd.Series(total_trip_times)
 
         # Statistical analysis.
         avg_time = df.mean()
@@ -104,11 +106,15 @@ if __name__ == "__main__":
     # Initialize the Engine.
     engine = RiskEngine()
 
-    # Test 1: Weather Impact and Volatility. Snowy day should create larger safety gap than a clear day.
+    # Create Dummy Airport Data
+    # We simulate a Tier 1 Airport (Avg ~60 mins curb to gate time, High Variance)
+    dummy_airport_delays = np.random.gamma(shape=10.0, scale=6.0, size=1000)
+
+    # Test 1: Weather Impact and Volatility.
     dummy_traffic = {
         'optimistic': {'seconds': 2400},  # 40 mins
         'best_guess': {'seconds': 3000},  # 50 mins
-        'pessimistic': {'seconds': 4800}   # 80 mins
+        'pessimistic': {'seconds': 4800}  # 80 mins
     }
     
     clear_day = {
@@ -123,43 +129,36 @@ if __name__ == "__main__":
         "Destination": {"condition": "Snow"}
     }
     
-    res_clear = engine.evaluate_trip(dummy_traffic, clear_day, buffer_mins=120)
-    res_snow = engine.evaluate_trip(dummy_traffic, snowy_day, buffer_mins=120)
+    # Passing dummy data
+    res_clear = engine.evaluate_trip(dummy_traffic, clear_day, dummy_airport_delays, buffer_mins=180)
+    res_snow = engine.evaluate_trip(dummy_traffic, snowy_day, dummy_airport_delays, buffer_mins=180)
     
-    # In snow, the P95 should be significantly higher due to the volatility map.
-    print(f"--- TEST 1: WEATHER IMPACT ---")
-    print(f"CLEAR: Avg={res_clear['avg_eta']}m, P95={res_clear['p95_eta']}m, Prob={res_clear['success_probability']}%")
-    print(f"SNOW:  Avg={res_snow['avg_eta']}m, P95={res_snow['p95_eta']}m, Prob={res_snow['success_probability']}%")
+    print(f"--- TEST 1: WEATHER + AIRPORT INTEGRATION ---")
+    print(f"CLEAR: Avg={res_clear['avg_eta']}m, P95={res_clear['p95_eta']}m")
+    print(f"SNOW:  Avg={res_snow['avg_eta']}m, P95={res_snow['p95_eta']}m")
 
     # Test 2: Tail Risk (P95 vs Average)
-    # Shows that even if the average is under the deadline, the P95 can flag a risk.
-    
     tight_traffic = {
         'optimistic': {'seconds': 3600},  # 60 mins
         'best_guess': {'seconds': 4200},  # 70 mins
-        'pessimistic': {'seconds': 6000}   # 100 mins
+        'pessimistic': {'seconds': 6000}  # 100 mins
     }
     
-    # User only has 90 minutes. P95 will be > buffer_mins.
-    res_tight = engine.evaluate_trip(tight_traffic, clear_day, buffer_mins=90)
+    # User only has 150 minutes total. 
+    # 70 min drive + ~60 min airport = 130 mins avg.
+    # But P95 might push over 150 due to volatility.
+    res_tight = engine.evaluate_trip(tight_traffic, clear_day, dummy_airport_delays, buffer_mins=150)
     
-    # This shows why we don't just use the average to decide when to leave.
-    print(f"\n--- TEST 2: TAIL RISK (Deadline = 90 mins) ---")
+    print(f"\n--- TEST 2: TAIL RISK (Deadline = 150 mins) ---")
     print(f"Average Trip: {res_tight['avg_eta']} mins")
     print(f"95% Risk Time: {res_tight['p95_eta']} mins")
     print(f"Success Probability: {res_tight['success_probability']}%")
     print(f"Risk Status: {res_tight['risk']}")
-    
 
-    # TEST 3: Volatility and buffer logic
-    # Show that "Uncertainty" (Snow) decreases your safety buffer faster than "Certainty" (Clear)
+    # Volatility and buffer logic
     print(f"\n--- TEST 3: SAFETY BUFFER & VOLATILITY ---")
-    
-    # Compare the safety buffer left in both scenarios.
     print(f"   - Clear Day Volatility (std_dev): {res_clear['std_dev']} mins")
     print(f"   - Snowy Day Volatility (std_dev): {res_snow['std_dev']} mins")
-    print(f"   - Clear Day Buffer: {res_clear['buffer_remaining']} mins")
-    print(f"   - Snowy Day Buffer: {res_snow['buffer_remaining']} mins")
     
     # Logic Check:
     gap = res_clear['buffer_remaining'] - res_snow['buffer_remaining']
