@@ -94,6 +94,8 @@ class RiskEngine:
         avg_time = df.mean()
         p95_time = df.quantile(0.95)
         std_dev = df.std()
+        if std_dev < 2.0:
+            std_dev = 2.0 # Force variance floor to prevent bell curve from being vertical line.
         success_prob = (df < buffer_mins).mean() * 100
         
         # Calculate a safety buffer 'remaining' based on the 95% safety margin

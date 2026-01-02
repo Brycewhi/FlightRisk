@@ -1,4 +1,5 @@
 import sys
+import time
 from traffic_engine import TrafficEngine
 from weather_engine import WeatherEngine
 from risk_engine import RiskEngine
@@ -44,50 +45,68 @@ def run_silent_assessment(origin, destination, departure_epoch, flight_epoch, ha
             if key in destination.upper(): target_airport = key
 
         # Low iterations (500) for faster search performance.
-        airport_times = airport.get_total_airport_time(target_airport, arrival_at_airport, has_bags, is_precheck, iterations=500)
+        airport_times = airport.get_total_airport_time(target_airport, arrival_at_airport, has_bags, is_precheck, iterations=1000)
 
         # Return Probability.
         report = risk.evaluate_trip(traffic_data, weather_report, airport_times, total_buffer_mins)
         return report['success_probability']
-    except:
+    except Exception as e:
+        # If the API fails, print why.
+        print(f"\033[91m[!] Silent Assessment Failed: {e}\033[0m")
         return 0.0
 
 def find_optimal_departure(origin, destination, flight_time_epoch, has_bags, is_precheck):
     # Searches the timeline for the Drop-Dead and Certainty windows.
-    print(f"\n\033[94m[*] Analyzing timeline for flight at {datetime.fromtimestamp(flight_time_epoch).strftime('%I:%M %p')}...\033[0m")
+    print(f"\n\033[94m[*] Analyzing timeline for flight with gate closing at {datetime.fromtimestamp(flight_time_epoch).strftime('%I:%M %p')}...\033[0m")
     now = int(datetime.now().timestamp())
+    
     drop_dead_time = None
     certainty_time = None
+    highest_prob_seen = 0.0
     
-    # Scan from 45 mins before gate closure up to 6 hours before (5-min steps).
-    for mins_before in range(45, 360, 5):
+    for mins_before in range(45, 360, 15):
         test_dep = flight_time_epoch - (mins_before * 60)
         
+        # If the scanner tries to check a time in the past, force it to check 'now' instead.
+        is_past = False
         if test_dep < now:
-            continue
+            test_dep = now
+            is_past = True 
             
+        # Pause for 0.1s to prevent API connection errors.
+        time.sleep(0.1)
+        
         prob = run_silent_assessment(origin, destination, test_dep, flight_time_epoch, has_bags, is_precheck)
         
-        # Capture Drop-Dead Time (Latest moment success is > 5%).
-        if drop_dead_time is None and prob > 5.0:
+        # Track the best probability found so far.
+        if prob > highest_prob_seen:
+            highest_prob_seen = prob
+
+        # Capture Drop-Dead Time (> 10%).
+        if drop_dead_time is None and prob > 10.0:
             drop_dead_time = test_dep
-            print(f"    Drop-Dead Moment captured: {datetime.fromtimestamp(drop_dead_time).strftime('%I:%M %p')}")
 
-        # Capture Certainty Time (Latest moment success hits 90%+).
-        if certainty_time is None and prob >= 90.0:
+        # Capture Certainty Time (> 95%).
+        if certainty_time is None and prob >= 95.0:
             certainty_time = test_dep
-            print(f"    Certainty Window captured: {datetime.fromtimestamp(certainty_time).strftime('%I:%M %p')}")
-            break # Found the latest safe departure.
+            print(f"    [✓] Certainty Window: {datetime.fromtimestamp(certainty_time).strftime('%I:%M %p')}")
+            break 
 
-    # If the simulation is so safe that even leaving late has 100% success:
+        
+        # If we just checked 'now', we can't look further back. Stop scanning.
+        if is_past:
+            break
+
+    # Reporting. 
     if certainty_time is None:
-        certainty_time = flight_time_epoch - (150 * 60) # Default: 2.5 hrs before.
+        print(f"    \033[93m[!] Warning: 95% Certainty unreachable. Max possible: {highest_prob_seen}%\033[0m")
+        
     if drop_dead_time is None:
-        drop_dead_time = flight_time_epoch - (75 * 60)  # Default: 1 hr 15 mins before.
+        print(f"    \033[91m[!] Alert: No viable 'Drop-Dead' window found.\033[0m")
             
     return certainty_time, drop_dead_time
 
-def run_assessment(origin, destination, departure_time, flight_time, has_bags, is_precheck, safe_time=None, dead_time=None):
+def run_assessment(origin, destination, departure_time, flight_time, has_bags, is_precheck, safe_time=None, dead_time=None, gate_deadline=None):
     # The full reporting engine with visualization and dashboard output.
     buffer_mins = (flight_time - departure_time) / 60
     
@@ -140,9 +159,9 @@ def run_assessment(origin, destination, departure_time, flight_time, has_bags, i
 
         # Risk Analysis.
         final_report = risk.evaluate_trip(traffic_data, weather_report, airport_processing_time, buffer_mins)
-
+        deadline_to_show = gate_deadline if gate_deadline else flight_time
         # Visualization and Dashboard.
-        display_dashboard(origin, destination, buffer_mins, final_report, departure_time, safe_time, dead_time)
+        display_dashboard(origin, destination, buffer_mins, final_report, departure_time, safe_time, dead_time, deadline_to_show)
 
         print(f"\n\033[96m[*] Rendering Risk Profile Visualization...\033[0m")
         viz = Visualizer()
@@ -155,24 +174,23 @@ def run_assessment(origin, destination, departure_time, flight_time, has_bags, i
     except Exception as e:
         print(f"\n\033[91m[!] CRITICAL ERROR: {e}\033[0m")
 
-def display_dashboard(origin, dest, buffer, report, departure_time, safe_time, dead_time):
+def display_dashboard(origin, dest, buffer, report, departure_time, safe_time, dead_time, gate_deadline):
     # Prints the final data-driven summary to the terminal.
     readable_time = datetime.fromtimestamp(departure_time).strftime('%I:%M %p')
 
     # Format the advice times
-    safe_str = datetime.fromtimestamp(safe_time).strftime('%I:%M %p') if safe_time else "N/A"
-    dead_str = datetime.fromtimestamp(dead_time).strftime('%I:%M %p') if dead_time else "N/A"
+    safe_str = datetime.fromtimestamp(safe_time).strftime('%I:%M %p') if safe_time else "UNREACHABLE"
+    dead_str = datetime.fromtimestamp(dead_time).strftime('%I:%M %p') if dead_time else "PAST DEADLINE"
 
     RESET, BOLD, GREEN, YELLOW, RED = "\033[0m", "\033[1m", "\033[92m", "\033[93m", "\033[91m"
     color = RED if report['risk'] in ["HIGH", "CRITICAL"] else GREEN
     
     print("\n" + "="*60)
-    print(f"{BOLD}FLIGHT-RISK TERMINAL v2.0 (INTELLIGENT){RESET}".center(68))
+    print(f"{BOLD}FLIGHT-RISK TERMINAL v2.0 {RESET}".center(68))
     print("="*60)
     print(f" ROUTE:     {origin} -> {dest}")
     print(f" DEPARTURE: {readable_time}")
-    print(f" GATE CLOSES: {datetime.fromtimestamp(flight_time).strftime('%I:%M %p')} (Deadline)") 
-    
+    print(f" GATE CLOSES: {datetime.fromtimestamp(gate_deadline).strftime('%I:%M %p')} (Deadline)")    
     print(f"{BOLD}STATISTICAL INSIGHTS:{RESET}")
     print(f"  - Weather Multiplier: {report['multiplier']}x")
     print(f"  - Avg Total Time:     {report['avg_eta']} mins")
@@ -189,14 +207,17 @@ def display_dashboard(origin, dest, buffer, report, departure_time, safe_time, d
     
     print("-" * 60)
     print(f"{BOLD}LOGISTICS ADVICE:{RESET}")
-    print(f"  - {GREEN}Certainty Time:  {safe_str} (95% Probability){RESET}")
-    print(f"  - {RED}Drop-Dead Time:  {dead_str} (<1% Probability){RESET}")
+    cert_color = GREEN if safe_time else YELLOW
+    print(f"  - {cert_color}Certainty Time:  {safe_str} (95% Probability){RESET}")
+    
+    dead_color = RED if dead_time else BOLD + RED
+    print(f"  - {dead_color}Drop-Dead Time:  {dead_str} (<10% Probability){RESET}")
     print("-" * 60)
     
     print(f" FINAL STATUS: {BOLD}{color}{report['risk']}{RESET} RISK")
     print("="*60 + "\n")
 
-# Interactive CLI.
+
 # Interactive CLI.
 if __name__ == "__main__":
     print("\n\033[1m" + "FLIGHTRISK: PREDICTIVE LOGISTICS ENGINE" + "\033[0m")
@@ -252,4 +273,4 @@ if __name__ == "__main__":
     safe_dep, dead_dep = find_optimal_departure(user_origin, user_dest, flight_time, has_bags, is_precheck)
     
     # Run the assessment.
-    run_assessment(user_origin, user_dest, eval_departure, flight_time, has_bags, is_precheck, safe_time=safe_dep, dead_time=dead_dep)
+    run_assessment(user_origin, user_dest, eval_departure, flight_time, has_bags, is_precheck, safe_dep, dead_dep, flight_time)
