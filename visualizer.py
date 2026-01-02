@@ -14,7 +14,7 @@ class Visualizer:
         ax = sns.histplot(simulated_times, kde=True, color="skyblue", element="step")
 
         # Add the deadline line (Vertical Asymptote).
-        plt.axvline(deadline, color='red', linestyle='--', label=f'Flight Deadline ({deadline}m)')
+        plt.axvline(deadline, color='red', linestyle='--', label=f'Gate Closes ({deadline}m)')
 
         # Add the P95 line (Vertical Asymptote).
         plt.axvline(p95_time, color='orange', linestyle=':', label=f'95% Confidence ({p95_time}m)')

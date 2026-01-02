@@ -68,6 +68,12 @@ class RiskEngine:
         best = traffic_results['best_guess']['seconds'] / 60
         pess = traffic_results['pessimistic']['seconds'] / 60
 
+        # If everything is the same, change the boundaries (safety check).
+        if opt >= best:
+            opt = best - 1
+        if pess <= best:
+            pess = best + 1
+
         # The Monte Carlo Sim.
         iterations = 1000
 

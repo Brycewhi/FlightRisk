@@ -12,6 +12,7 @@ class WeatherEngine:
         # Initialize credentials from config.
         self.api_key = config.OPENWEATHER_API_KEY
         self.base_url = "https://api.openweathermap.org/data/2.5/weather"
+        self._cache = {}
 
     def get_route_weather(self, encoded_polyline: str):
         """
@@ -19,6 +20,9 @@ class WeatherEngine:
         Fetches weather data for the Origin, Midpoint, and Destination.
         """
         try:
+            # Return weather for this exact route if it was previously seen.
+            if encoded_polyline in self._cache:
+                return self._cache[encoded_polyline]
             # Decode the compressed polyline into a list of (Lat, Lon) coordinates.
             coordinates = polyline.decode(encoded_polyline)
             if not coordinates:
@@ -59,9 +63,12 @@ class WeatherEngine:
                     }
                 else:
                     print(f"Weather API Error at {label}: Status {response.status_code}")
-
-            return route_weather_report if route_weather_report else None
-
+            # Save result in cache for future use.
+            if route_weather_report:
+                self._cache[encoded_polyline] = route_weather_report
+                return route_weather_report
+            return None
+        
         except Exception as e:
             # Catching decoding errors or network timeouts.
             print(f"Weather Engine System Error: {e}")
