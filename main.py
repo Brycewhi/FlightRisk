@@ -1,5 +1,6 @@
 import sys
 import time
+import database
 from traffic_engine import TrafficEngine
 from weather_engine import WeatherEngine
 from risk_engine import RiskEngine
@@ -222,6 +223,9 @@ def display_dashboard(origin, dest, buffer, report, departure_time, safe_time, d
 if __name__ == "__main__":
     print("\n\033[1m" + "FLIGHTRISK: PREDICTIVE LOGISTICS ENGINE" + "\033[0m")
     
+    # Initialize the database.
+    database.init_db()
+
     # Initialize the new FlightEngine.
     flight = FlightEngine()
     
@@ -271,6 +275,60 @@ if __name__ == "__main__":
 
     # Find safe time and dead time.
     safe_dep, dead_dep = find_optimal_departure(user_origin, user_dest, flight_time, has_bags, is_precheck)
+
+    print(f"\033[90m[*] Logging trip data to history...\033[0m")
     
+    # We want to log the stats for the SAFE departure time (our recommendation).
+    # If no safe time exists, we log the stats to show why it failed.
+    log_time = safe_dep if safe_dep else int(datetime.now().timestamp())
+    
+    # Briefly calculate stats for this specific time so we can save them.
+    # We create temporary engines just for this data capture.
+    temp_traffic = TrafficEngine()
+    temp_weather = WeatherEngine()
+    temp_risk = RiskEngine()
+    temp_airport = AirportEngine()
+    
+    # Get the raw numbers.
+    t_data = temp_traffic.get_route(user_origin, user_dest, "best_guess", departure_time=log_time)
+    w_data = temp_weather.get_route_weather(t_data['polyline'])
+    
+    dest_upper = user_dest.upper()
+    log_airport = "JFK" # Fallback.
+    airport_map = {
+        "LGA": "LGA", "LAGUARDIA": "LGA",
+        "EWR": "EWR", "NEWARK": "EWR",
+        "JFK": "JFK", "KENNEDY": "JFK",
+        "LAX": "LAX", "SFO": "SFO", "ORD": "ORD",
+        "MIA": "MIA", "MCO": "MCO", "FLL": "FLL",
+        "ATL": "ATL", "PBI": "PBI", "RSW": "RSW",
+        "BUR": "BUR", "ISP": "ISP"
+    }
+    for key, code in airport_map.items():
+        if key in dest_upper:
+            log_airport = code
+            break
+    
+    a_time = temp_airport.get_total_airport_time(log_airport, log_time + t_data['seconds'], has_bags, is_precheck, iterations=1000)
+    
+    # Get final report for the log.
+    log_report = temp_risk.evaluate_trip({'best_guess': t_data, 'optimistic': t_data, 'pessimistic': t_data}, w_data, a_time, (flight_time - log_time)/60)
+    
+    # Determine Risk Status Label.
+    risk_label = "LOW"
+    if log_report['success_probability'] < 95: risk_label = "HIGH"
+    if log_report['success_probability'] < 75: risk_label = "CRITICAL"
+    if safe_dep is None: risk_label = "UNREACHABLE"
+
+    # SAVE TO DB.
+    database.log_trip(
+        flight_num=user_flight_num,
+        origin=user_origin,
+        dest=user_dest,
+        multiplier=log_report['multiplier'],
+        suggested_time=safe_dep,
+        probability=log_report['success_probability'],
+        risk_status=risk_label
+    )    
     # Run the assessment.
     run_assessment(user_origin, user_dest, eval_departure, flight_time, has_bags, is_precheck, safe_dep, dead_dep, flight_time)
