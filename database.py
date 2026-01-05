@@ -1,79 +1,84 @@
 import sqlite3
 from datetime import datetime
+from typing import Optional, List, Any
 
 # The name of the file where data lives.
-DB_NAME = "flight_risk.db"
+DB_NAME: str = "flight_risk.db"
 
-def init_db():
+def init_db() -> None:
     """
-    Creates the 'trip_history' table if it doesn't exist yet.
-    Think of this as setting up the columns in an Excel sheet.
+    Initializes the SQLite schema. Creates the 'trip_history' table if it doesn't exist.
     """
-    connection = sqlite3.connect(DB_NAME)
-    cursor = connection.cursor()
-    
-    # Create a table with specific columns.
-    cursor.execute('''CREATE TABLE IF NOT EXISTS trip_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    run_timestamp TEXT,
-                    flight_number TEXT,
-                    origin TEXT,
-                    destination TEXT,
-                    weather_multiplier REAL,
-                    suggested_departure TEXT,
-                    success_probability REAL,
-                    risk_status TEXT
-                )''')
-    
-    connection.commit() # Save changes.
-    connection.close()  # Close connection.
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        # Using AUTOINCREMENT for primary keys ensures unique record IDs.
+        cursor.execute('''CREATE TABLE IF NOT EXISTS trip_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        run_timestamp TEXT,
+                        flight_number TEXT,
+                        origin TEXT,
+                        destination TEXT,
+                        weather_multiplier REAL,
+                        suggested_departure TEXT,
+                        success_probability REAL,
+                        risk_status TEXT
+                    )''')
+        conn.commit()
 
-def log_trip(flight_num, origin, dest, multiplier, suggested_time, probability, risk_status):
-    # Saves the results of a single simulation run.
-    
-    connection = sqlite3.connect(DB_NAME)
-    cursor = connection.cursor()
-    
-    # Handle the "UNREACHABLE" case (None).
+def log_trip(
+    flight_num: str, 
+    origin: str, 
+    dest: str, 
+    multiplier: float, 
+    suggested_time: Optional[int], 
+    probability: float, 
+    risk_status: str
+) -> None:
+    """
+    Saves the results of a single stochastic simulation run to the history log.
+    """
+    # Transform Unix epoch to human-readable string for storage.
     if suggested_time is None:
         rec_time_str = "UNREACHABLE"
     else:
-        # Convert the timestamp into a string (ex: "1735923000 --> 2026-01-03 16:30:00").
         rec_time_str = datetime.fromtimestamp(suggested_time).strftime('%Y-%m-%d %H:%M:%S')
 
-    # Insert a new row of data.
-    cursor.execute('''INSERT INTO trip_history 
+    # Implementation: Secure parameterized insertion.
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        query = '''INSERT INTO trip_history 
                  (run_timestamp, flight_number, origin, destination, 
                   weather_multiplier, suggested_departure, success_probability, risk_status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
-              (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 
-               flight_num, origin, dest, 
-               multiplier, rec_time_str, probability, risk_status))
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'''
+        
+        values = (
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 
+            flight_num.upper(), origin, dest, 
+            multiplier, rec_time_str, probability, risk_status
+        )
+        
+        cursor.execute(query, values)
+        conn.commit()
     
-    connection.commit()
-    connection.close()
-    print(f"\n\033[92m Trip saved to History Log (flight_risk.db).\033[0m")
+    print(f"\n\033[92m[✓] Record committed to {DB_NAME}\033[0m")
 
-def view_history():
+def view_history(limit: int = 5) -> List[Any]:
     """
-    A helper tool to print the last 5 trips to the screen.
-    Useful for checking if it worked without opening a database viewer.
+    Retrieves the most recent trip logs for dashboard rendering.
     """
-    connection = sqlite3.connect(DB_NAME)
-    cursor = connection.cursor()
-    cursor.execute("SELECT * FROM trip_history ORDER BY id DESC LIMIT 5")
-    rows = cursor.fetchall()
-    connection.close()
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        # Sort by ID descending to get the most recent entries first.
+        cursor.execute("SELECT * FROM trip_history ORDER BY id DESC LIMIT ?", (limit,))
+        rows = cursor.fetchall()
     
-    print("\n--- RECENT TRIP HISTORY ---")
-    if not rows:
-        print("No history found.")
-    for row in rows:
-        # row[2] is Flight Number, row[6] is Suggested Time, row[7] is Probability.
-        print(f"ID: {row[0]} | Flt: {row[2]} | Rec: {row[6]} | Prob: {row[7]}%")
-    print("---------------------------\n")
+    return rows
 
-# If you run 'python database.py', it creates the DB and shows history.
+# Local Unit Test Block.
 if __name__ == "__main__":
     init_db()
-    view_history()
+    # Diagnostic Print.
+    history = view_history()
+    print("\nRECENT HISTORY PREVIEW")
+    for entry in history:
+        print(f"ID: {entry[0]} | Flight: {entry[2]} | Success: {entry[7]}%")
