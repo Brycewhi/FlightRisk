@@ -127,7 +127,7 @@ with st.sidebar:
         depart_epoch = int((flight_dt - timedelta(hours=3)).timestamp())
         depart_dt = datetime.fromtimestamp(depart_epoch)
 
-    run_btn = st.button("Run Simulation", type="primary", use_container_width=True)
+    run_btn = st.button("Run Simulation", type="primary", width=True)
 
 # Main Dashboard Logic
 with tab_sim:

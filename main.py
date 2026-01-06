@@ -42,7 +42,7 @@ def display_dashboard(
     risk_color = RED if risk_status in ["HIGH", "CRITICAL"] else GREEN
 
     print("\n" + "="*60)
-    print(f"{BOLD}FLIGHT-RISK TERMINAL v2.0{RESET}".center(68))
+    print(f"{BOLD}FLIGHT-RISK TERMINAL v3.0{RESET}".center(68))
     print("="*60)
     print(f" {BOLD}ROUTE:{RESET}     {origin} -> {dest}")
     print(f" {BOLD}DEPARTURE:{RESET} {readable_dep}")
