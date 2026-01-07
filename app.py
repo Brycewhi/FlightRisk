@@ -95,18 +95,24 @@ with st.sidebar:
 
     origin = st.text_area("Starting Address", value="Empire State Building, NY")
     destination = st.text_input("Airport", value=st.session_state.dest_val)
-    flight_time_input = st.text_input("Flight Departure Time", value=st.session_state.time_str)
+    
+    # Date and Time Selection to fix "Time Travel" bugs.
+    col_date, col_time = st.columns(2)
+    with col_date:
+        flight_date = st.date_input("Flight Date", value=datetime.now())
+    with col_time:
+        flight_time_input = st.text_input("Flight Time", value=st.session_state.time_str)
     
     flight_t = parse_flexible_time(flight_time_input)
     if not flight_t: st.stop()
     
-    now = datetime.now()
-    flight_dt = datetime.combine(now.date(), flight_t)
-    if flight_dt < now: flight_dt += timedelta(days=1)
+    # Explicit combination of date and time.
+    flight_dt = datetime.combine(flight_date, flight_t)
     flight_epoch = int(flight_dt.timestamp())
     
     check_bags = st.checkbox("Checking Bags?", value=True)
     tsa_pre = st.checkbox("TSA PreCheck?", value=False)
+    time_to_kill_input = st.slider("Desired 'Time to Kill' at Airport (min)", min_value=0, max_value=120, value=30, help="Extra time for food, coffee, or lounge before gate closes.")
     risk_mode = st.select_slider("Risk Tolerance", options=["Conservative", "Balanced", "Aggressive"], value="Balanced")
     user_threshold = {"Conservative": 95.0, "Balanced": 85.0, "Aggressive": 75.0}[risk_mode]
     
@@ -115,32 +121,34 @@ with st.sidebar:
     mode = st.radio("Simulation Mode:", ["Suggest Best Departure", "Leave Now", "Test Specific Time"], index=0)
     
     if mode == "Test Specific Time":
-        dep_input = st.text_input("Manual Departure Time:", value=(now + timedelta(minutes=30)).strftime("%I:%M %p"))
+        dep_input = st.text_input("Manual Departure Time:", value=(datetime.now() + timedelta(minutes=30)).strftime("%I:%M %p"))
         depart_t = parse_flexible_time(dep_input)
         if not depart_t: st.stop()
-        depart_dt = datetime.combine(flight_dt.date(), depart_t)
+        # Combine manual time with the selected flight date.
+        depart_dt = datetime.combine(flight_date, depart_t)
         depart_epoch = int(depart_dt.timestamp())
     elif mode == "Leave Now":
         depart_dt = datetime.now()
         depart_epoch = int(depart_dt.timestamp())
     else:
+        # Default start search time (placeholder, solver handles the real search).
         depart_epoch = int((flight_dt - timedelta(hours=3)).timestamp())
         depart_dt = datetime.fromtimestamp(depart_epoch)
 
-    run_btn = st.button("Run Simulation", type="primary", width=True)
+    run_btn = st.button("Run Simulation", type="primary", width='stretch')
 
 # Main Dashboard Logic
 with tab_sim:
     if run_btn:
         with st.spinner("Analyzing Risks..."):
             if mode == "Suggest Best Departure":
-                opt_epoch, dead_epoch = solver.find_optimal_departure(origin, destination, flight_epoch, check_bags, tsa_pre, risk_threshold=user_threshold)
+                opt_epoch, dead_epoch = solver.find_optimal_departure(origin, destination, flight_epoch, check_bags, tsa_pre, risk_threshold=user_threshold, buffer_minutes=time_to_kill_input)
                 if opt_epoch:
                     depart_epoch, depart_dt = opt_epoch, datetime.fromtimestamp(opt_epoch)
-                    st.info(f"💡 Optimal Departure: **{depart_dt.strftime('%I:%M %p')}**")
+                    st.info(f"💡 Optimal Departure: **{depart_dt.strftime('%I:%M %p')}** on **{depart_dt.strftime('%b %d')}**")
                 else: st.error("❌ No viable departure found."); st.stop()
             
-            raw_report = solver.run_full_analysis(origin, destination, depart_epoch, flight_epoch, check_bags, tsa_pre)
+            raw_report = solver.run_full_analysis(origin, destination, depart_epoch, flight_epoch, check_bags, tsa_pre, buffer_minutes=time_to_kill_input)
             if not raw_report: st.error("⚠️ Traffic API Failure."); st.stop()
                 
             data = normalize_output(raw_report, depart_dt, flight_dt)
