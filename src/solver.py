@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from typing import Optional, Tuple, Dict, Any
 
-# Import engines.
+# Import sibling modules from the same 'src' package.
 from traffic_engine import TrafficEngine
 from weather_engine import WeatherEngine
 from risk_engine import RiskEngine
@@ -29,10 +29,13 @@ def run_full_analysis(
     airport = AirportEngine()  
     
     # Adjust flight_time to account for 'Time to Kill' buffer.
+    # We treat the buffer as if the flight is earlier, creating a safety margin.
     effective_deadline = flight_time - (15 * 60) - (buffer_minutes * 60)
+    
+    # Calculate the total available time window (in minutes).
     buffer_mins: float = (effective_deadline - departure_time) / 60
 
-    # Gather Traffic and Weather Data.
+    # 1. Gather Traffic Data.
     traffic_data: Dict[str, Any] = {}
     for model in ["optimistic", "best_guess", "pessimistic"]:
         route_res = traffic.get_route(origin, destination, model, departure_time=departure_time)
@@ -42,15 +45,17 @@ def run_full_analysis(
         
         traffic_data[model] = route_res
     
+    # 2. Gather Weather Data (based on the route polyline).
     route_polyline = traffic_data['best_guess'].get('polyline')
     weather_report = weather.get_route_weather(route_polyline)
     if weather_report is None:
         return None
 
-    # Airport Queue Simulation.
+    # 3. Simulate Airport Queues (Check-in + TSA + Walk).
     drive_time_seconds = traffic_data['best_guess']['seconds']
     est_arrival = departure_time + drive_time_seconds
     
+    # Heuristic to detect airport code from destination string.
     target_airport = "JFK" 
     if "LGA" in destination.upper(): target_airport = "LGA"
     elif "EWR" in destination.upper(): target_airport = "EWR"
@@ -59,6 +64,7 @@ def run_full_analysis(
     security_sim = airport.simulate_security(target_airport, est_arrival, is_precheck, iterations=1000)
     walk_sim = airport.simulate_walk(target_airport, iterations=1000)
     
+    # Sum the stochastic arrays to get total airport time distributions.
     total_airport_delays = checkin_sim + security_sim + walk_sim
     
     airport_stats = {
@@ -67,7 +73,7 @@ def run_full_analysis(
         "walk": float(walk_sim.mean())
     }
 
-    # Final Stochastic Evaluation.
+    # 4. Final Stochastic Evaluation (Monte Carlo).
     return risk.evaluate_trip(
         traffic_results=traffic_data, 
         weather_report=weather_report, 

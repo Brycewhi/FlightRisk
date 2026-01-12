@@ -3,10 +3,11 @@
 
 [![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org)
 [![Streamlit](https://img.shields.io/badge/UI-Streamlit-FF4B4B.svg)](https://streamlit.io)
+[![C++11](https://img.shields.io/badge/C++-11-00599C.svg)](https://isocpp.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-![FlightRisk Dashboard](dashboard_v3.png)
-![Trip History View](history_tab.png)
+![FlightRisk Dashboard](assets/dashboard_v3.png)
+![Trip History View](assets/history_tab.png)
 
 Standard navigation apps tell you when you'll arrive *on average*. But if a $400 flight closes its gate in 60 minutes, the average doesn't matter—the **tail-end risk** does. **FlightRisk v3.0** is a full-stack predictive engine that replaces static estimates with a **1,000-trial Monte Carlo simulation**, accounting for traffic volatility, terminal congestion, and hyper-local weather.
 
@@ -14,14 +15,12 @@ Standard navigation apps tell you when you'll arrive *on average*. But if a $400
 
 ## 🧠 The Statistical Stack (How it Works)
 
-I built this project to apply **Queue Theory** and **Stochastic Modeling** to a real-world logistics problem. The system fusions four specialized engines:
+I built this project to apply **Queue Theory** and **Stochastic Modeling** to a real-world logistics problem. The system fuses four specialized engines:
 
 ### 1. 🚦 TrafficEngine (Triangular Distribution)
 Fetches data from the **Google Directions API** (Optimistic, Best Guess, and Pessimistic durations). 
 * It treats these as `min`, `mode`, and `max` values to build a **Triangular Distribution**.
 * This simulates the reality that traffic delays are "right-skewed"—it is mathematically easier to be 20 minutes late than 20 minutes early.
-
-
 
 ### 2. ⛈️ WeatherEngine (Gaussian Noise Factor)
 Uses the **OpenWeather API** to perform spatial sampling along the route polyline.
@@ -32,14 +31,9 @@ Uses the **OpenWeather API** to perform spatial sampling along the route polylin
 Airport wait times (TSA, Bag Drop, Check-in) follow a **Gamma Distribution** to model the "long-tail" risk of unexpected bottlenecks.
 * **Tiered Logic:** The model distinguishes between **Tier 1 Hubs** (JFK, ATL) and **Tier 2 Regional** airports to adjust wait-time variance.
 
-
-
-[Image of a Gamma distribution probability density function]
-
-
 ### 4. 🧮 RiskEngine (Monte Carlo Integration)
 The system aggregates 1,000 samples from the engines to generate a **Probability Density Function (PDF)**.
-* It calculates the **P95 Arrival Time**—the time by which you will arrive in 95% of simulated universes.
+* **Hybrid Architecture:** The project includes both a NumPy-based Python engine and a high-performance **C++ simulation core** (`cpp_core/`) capable of running 100k+ iterations in <0.05s.
 
 ---
 
@@ -65,36 +59,61 @@ FlightRisk is powered by a live data-fusion pipeline:
 
 ## 🛠 File Architecture (Modular OOP)
 
-* `app.py`: Reactive **Streamlit** dashboard with a History tab and CSV export.
-* `solver.py`: Recursive search algorithm identifying the "Latest Safe Departure."
-* `flight_engine.py`: Handles live flight validation and automated **-15m Gate Closure** deadlines.
-* `airport_engine.py`: Simulates terminal processing using Gamma-distribution queue modeling.
-* `database.py`: **SQLite** persistence layer using the Context Manager pattern for trip logging.
-* `visualizer.py`: Custom Matplotlib/Seaborn wrapper for rendering the P95 Risk Profile.
+The project follows a standard Python package structure to separate source code, assets, and compiled binaries.
 
----
+```text
+FlightRisk/
+├── assets/                 # UI Screenshots and static images
+├── cpp_core/               # C++ Simulation Engine (High-Performance)
+│   └── simulation.cpp
+├── src/                    # Source Code Package
+│   ├── app.py              # Main Streamlit Dashboard
+│   ├── main.py             # CLI Entry Point
+│   ├── solver.py           # Recursive Departure Optimization Algorithm
+│   ├── config.py           # Environment & Path Configuration
+│   ├── database.py         # SQLite Persistence Layer
+│   ├── traffic_engine.py   # Google Maps Integration
+│   ├── weather_engine.py   # OpenWeather Integration
+│   ├── flight_engine.py    # AeroDataBox Integration
+│   ├── risk_engine.py      # Python Monte Carlo Logic
+│   └── visualizer.py       # Matplotlib/Seaborn Rendering
+├── .env                    # API Keys (GitIgnored)
+└── requirements.txt        # Python Dependencies
+
+--- 
 
 ## 🚦 Installation
 
-1.  **Clone:** `git clone https://github.com/Brycewhi/FlightRisk.git`
-2.  **Install:** `pip install -r requirements.txt`
-3.  **Config:** Create a `.env` file with your API keys (Google, OpenWeather, RapidAPI).
-4.  **Run:** `streamlit run app.py`
+1.  **Clone:**
+    ```bash
+    git clone [https://github.com/Brycewhi/FlightRisk.git](https://github.com/Brycewhi/FlightRisk.git)
+    cd FlightRisk
+    ```
+2.  **Install:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+3.  **Config:**
+    Create a `.env` file in the root directory with your API keys:
+    ```env
+    GOOGLE_API_KEY=your_key
+    OPENWEATHER_API_KEY=your_key
+    RAPID_API_KEY=your_key
+    ```
+4.  **Run:**
+    ```bash
+    streamlit run src/app.py
+    ```
 
 ---
 
 ## 📈 Roadmap
 
-* **v3.5:** Implement `asyncio` to parallelize multi-engine API requests, reducing total latency by ~60%.
-* **v4.0:** Port simulation loops to **C++/PyBind11** for high-performance computation to scale to 100k+ trials.
-
-
-
-* **v4.5 [ML Feedback Layer]:** * Implement a regression model to analyze `trip_history` data from SQLite.
+* **v3.5:** Implement `asyncio` to parallelize multi-engine API requests (Proof of Concept in `src/async_benchmark.py`).
+* **v4.0:** Full integration of the C++ Core via `ctypes` for main dashboard simulations.
+* **v4.5 [ML Feedback Layer]:**
+    * Implement a regression model to analyze `trip_history` data from SQLite.
     * Use actual vs. predicted arrival deltas to dynamically tune the **Shape ($\alpha$)** and **Scale ($\beta$)** parameters of the AirportEngine’s Gamma distributions.
-    * Transform static heuristics into a learning system that improves accuracy with every logged trip.
-
-
 
 ---
 **Developed by Bryce Whiteside** *Applied Mathematics & Computer Science | Stony Brook University* [![GitHub](https://img.shields.io/badge/GitHub-Brycewhi-181717?logo=github)](https://github.com/Brycewhi)

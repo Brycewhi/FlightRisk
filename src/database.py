@@ -2,14 +2,19 @@ import sqlite3
 from datetime import datetime
 from typing import Optional, List, Any
 
-# The name of the file where data lives.
-DB_NAME: str = "flight_risk.db"
+# Import the centralized database path from the configuration file.
+# This ensures we always write to the 'flight_data.db' in the root directory.
+try:
+    from config import DB_PATH
+except ImportError:
+    # Fallback for when running this script directly for testing.
+    from src.config import DB_PATH
 
 def init_db() -> None:
     """
     Initializes the SQLite schema. Creates the 'trip_history' table if it doesn't exist.
     """
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         # Using AUTOINCREMENT for primary keys ensures unique record IDs.
         cursor.execute('''CREATE TABLE IF NOT EXISTS trip_history (
@@ -44,7 +49,7 @@ def log_trip(
         rec_time_str = datetime.fromtimestamp(suggested_time).strftime('%Y-%m-%d %H:%M:%S')
 
     # Implementation: Secure parameterized insertion.
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         query = '''INSERT INTO trip_history 
                  (run_timestamp, flight_number, origin, destination, 
@@ -60,13 +65,13 @@ def log_trip(
         cursor.execute(query, values)
         conn.commit()
     
-    print(f"\n\033[92m[✓] Record committed to {DB_NAME}\033[0m")
+    print(f"\n\033[92m[✓] Record committed to database.\033[0m")
 
 def view_history(limit: int = 5) -> List[Any]:
     """
     Retrieves the most recent trip logs for dashboard rendering.
     """
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
         # Sort by ID descending to get the most recent entries first.
         cursor.execute("SELECT * FROM trip_history ORDER BY id DESC LIMIT ?", (limit,))

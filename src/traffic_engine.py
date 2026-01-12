@@ -90,5 +90,4 @@ if __name__ == "__main__":
     
     if safe_res:
         print(f"Time: {safe_res['human_readable']} ({safe_res['seconds']}s)")
-        print(f"Path Data (Polyline): {safe_res['polyline'][:20]}...")   
-
+        print(f"Path Data (Polyline): {safe_res['polyline'][:20]}...")

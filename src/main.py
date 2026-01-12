@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 # Internal Imports.
+# These modules must be located in the same 'src' directory.
 import database
 import solver
 from visualizer import Visualizer
@@ -98,6 +99,7 @@ def run_assessment(
         display_dashboard(origin, destination, final_report, departure_time, safe_time, dead_time, flight_time)
 
         # Generate Kernel Density Estimation Plot.
+        # Note: This will open a popup window. Close the window to continue the script.
         print(f"{CYAN}[*] Rendering Risk Profile Visualization...{RESET}")
         viz = Visualizer()
         viz.plot_risk_profile(simulated_times=final_report['raw_data'], deadline=(flight_time - departure_time) / 60, p95_time=final_report['p95_eta'])

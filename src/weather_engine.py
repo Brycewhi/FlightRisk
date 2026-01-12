@@ -83,6 +83,7 @@ class WeatherEngine:
 if __name__ == "__main__":
     import time
     test_engine = WeatherEngine()
+    # Sample polyline (roughly maps to a short route segment).
     sample_polyline = r"uzpwFvps|U" 
     
     print("Starting WeatherEngine Check...")
@@ -104,7 +105,7 @@ if __name__ == "__main__":
     # Assertions: Proving the cache worked.
     assert report_1 == report_2, "CACHE ERROR: Cached data does not match original."
     
-    # If it hit the cache, the time should be near-zero (e.g., < 0.001 seconds) compared to a real network call which takes ~0.5 - 1.0 seconds.
+    # If it hit the cache, the time should be near-zero (e.g., < 0.01 seconds) compared to a real network call which takes ~0.5 - 1.0 seconds.
     execution_time = end_time - start_time
     assert execution_time < 0.01, f"PERFORMANCE ERROR: Cache too slow ({execution_time}s)."
     

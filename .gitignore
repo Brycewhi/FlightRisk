@@ -1,6 +1,23 @@
+# Python & Virtual Environment
 venv/
 __pycache__/
+*.pyc
+
+# Security
 .env
+
+# Operating System Junk
 .DS_Store
+
+# Local Data & Databases
 *.db
+flight_data.db
+
+# C++ Compiled Binaries
+*.so
+*.o
+*.out
+cpp_core/simulation
+
+# Generated Assets/Temp Files
 risk_profile_v2.png
