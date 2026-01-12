@@ -105,7 +105,22 @@ FlightRisk/
     streamlit run src/app.py
     ```
 
----
+### 🐍 Developer Setup (Virtual Environment)
+If you are developing locally, it is recommended to use a virtual environment:
+```bash
+# Create the environment
+python3 -m venv .venv
+
+# Activate it (Mac/Linux)
+source .venv/bin/activate
+
+# Activate it (Windows)
+.venv\Scripts\activate
+
+### ⚡ C++ Core Compilation (Optional)
+To enable the high-performance simulation engine, compile the C++ shared library:
+```bash
+g++ -O3 -shared -std=c++11 -fPIC cpp_core/simulation.cpp -o cpp_core/simulation.so
 
 ## 📈 Roadmap
 
