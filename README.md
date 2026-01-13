@@ -80,7 +80,8 @@ FlightRisk/
 ├── .env                    # API Keys (GitIgnored)
 └── requirements.txt        # Python Dependencies
 ```
---- 
+
+---
 
 ## 🚦 Installation
 
@@ -116,11 +117,15 @@ source .venv/bin/activate
 
 # Activate it (Windows)
 .venv\Scripts\activate
+```
 
 ### ⚡ C++ Core Compilation (Optional)
 To enable the high-performance simulation engine, compile the C++ shared library:
 ```bash
 g++ -O3 -shared -std=c++11 -fPIC cpp_core/simulation.cpp -o cpp_core/simulation.so
+```
+
+---
 
 ## 📈 Roadmap
 
