@@ -12,7 +12,7 @@
 
 Standard navigation apps tell you when you'll arrive *on average*. But if a $400 flight closes its gate in 60 minutes, the average doesn't matter—the **tail-end risk** does. 
 
-**FlightRisk v4.0** is a full-stack predictive engine that replaces static estimates with a **1 Million-trial Monte Carlo simulation**, accounting for traffic volatility, terminal congestion, and hyper-local weather. It utilizes a **Hybrid Python/C++ Architecture** to perform these simulations 300x faster than standard Python implementations.
+**FlightRisk v4.0** is a full-stack predictive engine that replaces static estimates with a **100,000 Monte Carlo simulation**, accounting for traffic volatility, terminal congestion, and hyper-local weather. It utilizes a **Hybrid Python/C++ Architecture** to perform these simulations 300x faster than standard Python implementations.
 
 ---
 
@@ -30,12 +30,12 @@ Uses the **OpenWeather API** to perform spatial sampling along the route polylin
 * Weather severity at the origin and airport is mapped to a **Normal Distribution**.
 * This acts as a "Volatility Multiplier" on the traffic data, expanding the variance during active storms.
 
-### 3. 🛡️ AirportEngine (Gamma Distribution Queue Theory)
+### 3. ✈ AirportEngine (Gamma Distribution Queue Theory)
 Airport wait times (TSA, Bag Drop, Check-in) follow a **Gamma Distribution** to model the "long-tail" risk of unexpected bottlenecks.
 * **Tiered Logic:** The model distinguishes between **Tier 1 Hubs** (JFK, ATL) and **Tier 2 Regional** airports to adjust wait-time variance.
 
 ### 4. 🧮 RiskEngine (Hybrid C++ Monte Carlo Core)
-The system aggregates 1,000,000 samples from the engines to generate a **Probability Density Function (PDF)**.
+The system aggregates 100,000 samples from the engines to generate a **Probability Density Function (PDF)**.
 * **Performance:** The core simulation loop is offloaded to a compiled **C++ Extension (`flightrisk_cpp`)** via **pybind11**.
 * **Speedup:** Reduces simulation time from ~30.0s (Pure Python) to **<0.15s (C++)**.
 
@@ -115,8 +115,8 @@ FlightRisk/
 If you are on macOS, ensure you have the command line tools installed:
 ```bash
 xcode-select --install
+```
 
-```markdown
 ---
 
 ## 📈 Roadmap
