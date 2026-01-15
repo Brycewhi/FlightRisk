@@ -7,3 +7,4 @@ matplotlib
 seaborn
 scipy
 streamlit
+pybind11>=2.10.0
