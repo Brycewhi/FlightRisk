@@ -1,10 +1,10 @@
 /**
  * @file simulation.cpp
  * @brief High-Performance Monte Carlo Engine for FlightRisk.
- * * This module replaces the Python-based simulation loops with compiled C++.
+ * This module replaces the Python-based simulation loops with compiled C++.
  * It handles the stochastic generation of Traffic and TSA delays using
  * Normal and Gamma distributions, respectively.
- * * Performance:
+ * Performance:
  * Python (SciPy): ~3.0s for 100k iterations.
  * C++ (PyBind11): ~0.05s for 100k iterations.
  */
@@ -25,7 +25,7 @@ namespace py = pybind11;
 /**
  * @brief Generates an array of random Gamma-distributed variables.
  * Used by the AirportEngine to simulate TSA lines with high variance.
- * * @param shape Shape parameter (k) of the Gamma distribution.
+ * @param shape Shape parameter (k) of the Gamma distribution.
  * @param scale Scale parameter (theta) of the Gamma distribution.
  * @param iterations Total number of samples to generate.
  * @return NumPy array of simulated wait times.
@@ -51,7 +51,7 @@ py::array_t<double> simulate_gamma(double shape, double scale, int iterations) {
 /**
  * @brief Calculates the probability of missing a flight.
  * Simulates the full "Traffic + TSA + Walk" journey 100,000+ times.
- * * @param buffer_mins Total time user has before gate closes.
+ * @param buffer_mins Total time user has before gate closes.
  * @param traffic_avg Mean traffic duration (Normal Dist).
  * @param traffic_std Volatility of traffic (Normal Dist).
  * @param tsa_shape Gamma Shape parameter for TSA lines.

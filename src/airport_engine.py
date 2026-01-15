@@ -39,11 +39,11 @@ class AirportEngine:
         """Returns statistical moments (Average, Scale) for the Gamma distribution."""
         tier = self._get_tier(airport_code)
         if tier == 1:
-            return 20.0, 4.0  # High chaos (e.g. JFK).
+            return 15.0, 4.0  # High chaos (e.g. JFK).
         elif tier == 2:
-            return 12.0, 2.  # Moderate.
+            return 10.0, 2.0  # Moderate.
         else:
-            return 6, 1.5  # Efficient (e.g. ISP).
+            return 4, 1.0  # Efficient (e.g. ISP).
 
     def _get_time_multiplier(self, dt_object: datetime) -> float:
         """Calculates congestion factor based on hour of day (Rush Hour logic)."""

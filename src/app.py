@@ -8,7 +8,7 @@ from flight_engine import FlightEngine
 
 # Page configuration.
 st.set_page_config(
-    page_title="FlightRisk v3.0",
+    page_title="FlightRisk",
     page_icon="✈️",
     layout="wide",
     initial_sidebar_state="expanded"
