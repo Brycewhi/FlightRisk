@@ -6,7 +6,7 @@ print("-----------------------------------")
 
 start = time.time()
 
-# Running 1 MILLION simulations
+# Running 100k simulations
 risk = flightrisk_cpp.calculate_risk(120.0, 60.0, 15.0, 2.0, 10.0, 10.0, 100000)
 
 end = time.time()

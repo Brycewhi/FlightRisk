@@ -218,7 +218,7 @@ with tab_hist:
         ])
         
         # Display the table (hiding ID column).
-        st.dataframe(df.drop(columns=["ID"]), use_container_width=True, hide_index=True)
+        st.dataframe(df.drop(columns=["ID"]), width='stretch', hide_index=True)
         
         # Add an export option.
         csv = df.to_csv(index=False).encode('utf-8')
