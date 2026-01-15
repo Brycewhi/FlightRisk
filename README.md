@@ -80,7 +80,7 @@ FlightRisk/
 │   └── database.py         # SQLite Persistence Layer
 ├── setup.py                # C++ Compilation Script
 └── requirements.txt        # Python Dependencies
-
+```
 ---
 
 ## 🚦 Installation
