@@ -1,12 +1,14 @@
-import requests
+import aiohttp
+import asyncio
 import polyline
 import config
+import time
 from typing import Dict, Optional, Any, Union
 
 class WeatherEngine:
     """
-    Environmental sensing layer. 
-    Performs corridor sampling along route geometry to quantify atmospheric risk factors.
+    ASYNC Environmental sensing layer. 
+    Performs PARALLEL corridor sampling along route geometry to quantify atmospheric risk factors.
     """
     api_key: str
     base_url: str
@@ -17,12 +19,52 @@ class WeatherEngine:
         self.base_url = "https://api.openweathermap.org/data/2.5/weather"
         self._cache: Dict[str, Dict] = {}
 
-    def get_route_weather(self, encoded_polyline: str) -> Optional[Dict[str, Any]]:
+    async def _fetch_point(self, session: aiohttp.ClientSession, lat: float, lon: float, label: str) -> Optional[Dict[str, Any]]:
         """
-        Samples atmospheric conditions at the Origin, Midpoint, and Destination.
+        Helper: Fetches a single coordinate's weather asynchronously.
+        
+        Args:
+            session: Active aiohttp connection pool.
+            lat: Latitude.
+            lon: Longitude.
+            label: Point identifier (e.g., 'Start', 'Midpoint').
+        Returns:
+            Formatted dictionary containing weather data for the point.
+        """
+        params: Dict[str, Union[str, float, int]] = {
+            "lat": lat,
+            "lon": lon,
+            "appid": self.api_key,
+            "units": "imperial"
+        }
+        try:
+            async with session.get(self.base_url, params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    weather_list = data.get('weather', [])
+                    condition = weather_list[0]['main'] if weather_list else "Clear"
+                    
+                    return {
+                        "label": label,
+                        "data": {
+                            "temp": data['main']['temp'],
+                            "condition": condition,
+                            "description": weather_list[0]['description'] if weather_list else "no data",
+                            "location_name": data.get('name', label)
+                        }
+                    }
+                return None
+        except Exception as e:
+            print(f"⚠️ Weather API Error at {label}: {e}")
+            return None
+
+    async def get_route_weather(self, encoded_polyline: str, session: aiohttp.ClientSession) -> Optional[Dict[str, Any]]:
+        """
+        Samples atmospheric conditions at Origin, Midpoint, and Destination simultaneously.
         
         Args:
             encoded_polyline: Compressed Google Maps route geometry.
+            session: Active aiohttp ClientSession.
         Returns:
             Corridor weather report or None if spatial sampling fails.
         """
@@ -30,84 +72,73 @@ class WeatherEngine:
             # Memoization lookup to prevent redundant network I/O.
             if encoded_polyline in self._cache:
                 return self._cache[encoded_polyline]
-            coordinates = polyline.decode(encoded_polyline)
 
+            coordinates = polyline.decode(encoded_polyline)
             if not coordinates:
                 return None
-            
+
             # Map sampling waypoints to indices.
-            indices: Dict[str, int] = {
+            points_map = {
                 "Start": 0,
                 "Midpoint": len(coordinates) // 2,
                 "Destination": len(coordinates) - 1
             }
 
-            report: Dict[str, Any] = {}
-
-            # Iterate through samples to build a comprehensive risk profile.
-            for label, index in indices.items():
+            # Create Async Tasks (The Parallel Magic).
+            tasks = []
+            for label, index in points_map.items():
                 lat, lon = coordinates[index]
-                params: Dict[str, Union[str, float, int]] = {
-                    "lat": lat,
-                    "lon": lon,
-                    "appid": self.api_key,
-                    "units": "imperial" 
-                }
+                tasks.append(self._fetch_point(session, lat, lon, label))
 
-                response = requests.get(self.base_url, params=params)                
-                if response.status_code == 200:
-                    data = response.json()
-                    # Safe extraction of weather metadata.
-                    weather_list = data.get('weather', [])
-                    condition = weather_list[0]['main'] if weather_list else "Clear"
+            # Fire all requests at once and wait for them to finish.
+            results = await asyncio.gather(*tasks)
 
-                    report[label] = {
-                        "temp": data['main']['temp'],
-                        "condition": condition,
-                        "description": weather_list[0]['description'] if weather_list else "no data",
-                        "location_name": data.get('name', label)
-                    }
-                else:
-                    print(f"Weather API Error at {label}: {response.status_code}")
+            # Process Results.
+            report: Dict[str, Any] = {}
+            for res in results:
+                if res:
+                    report[res['label']] = res['data']
 
+            # Only return if we got data for all 3 points (or at least some data).
             if report:
                 self._cache[encoded_polyline] = report # Commit to cache.
                 return report
             return None
-        
+            
         except Exception as e:
             print(f"Weather Engine System Error: {e}")
             return None
-        
+
 # Local Unit Test Block.
 if __name__ == "__main__":
-    import time
-    test_engine = WeatherEngine()
-    # Sample polyline (roughly maps to a short route segment).
-    sample_polyline = r"uzpwFvps|U" 
-    
-    print("Starting WeatherEngine Check...")
+    async def run_test():
+        test_engine = WeatherEngine()
+        # Sample polyline (roughly maps to a short route segment).
+        sample_polyline = r"uzpwFvps|U" 
 
-    # Test 1: Functional Integration.
-    report_1 = test_engine.get_route_weather(sample_polyline)
-    
-    # Assertions: Validating that the engine didn't fail.
-    assert report_1 is not None, "CRITICAL: Engine returned None on first pass."
-    assert "Start" in report_1, "DATA ERROR: Missing 'Start' key in report."
-    print("✅ Pass 1: Initial data fetch successful.")
+        print("Starting Async Weather Check...")
+        start_time = time.time()
+        
+        # We must create the session here to pass it in.
+        async with aiohttp.ClientSession() as session:
+            # Test 1: Functional Integration.
+            report_1 = await test_engine.get_route_weather(sample_polyline, session)
+            
+            # Assertions: Validating that the engine didn't fail.
+            assert report_1 is not None, "CRITICAL: Engine returned None on first pass."
+            assert "Start" in report_1, "DATA ERROR: Missing 'Start' key in report."
+            
+            duration = time.time() - start_time
+            print(f"✅ Pass 1: Async fetch successful ({duration:.4f}s).")
 
-    # Test 2: Memoization (Cache) Logic.
-    # We record the time it takes for a second call.
-    start_time = time.time()
-    report_2 = test_engine.get_route_weather(sample_polyline)
-    end_time = time.time()
-    
-    # Assertions: Proving the cache worked.
-    assert report_1 == report_2, "CACHE ERROR: Cached data does not match original."
-    
-    # If it hit the cache, the time should be near-zero (e.g., < 0.01 seconds) compared to a real network call which takes ~0.5 - 1.0 seconds.
-    execution_time = end_time - start_time
-    assert execution_time < 0.01, f"PERFORMANCE ERROR: Cache too slow ({execution_time}s)."
-    
-    print(f"✅ Pass 2: Memoization verified. Cache return time: {execution_time:.6f}s")
-    print("\nDiagnostic Complete")
+            # Test 2: Memoization (Cache) Logic.
+            start_cache = time.time()
+            report_2 = await test_engine.get_route_weather(sample_polyline, session)
+            cache_time = time.time() - start_cache
+            
+            assert report_1 == report_2, "CACHE ERROR: Cached data does not match original."
+            assert cache_time < 0.001, f"PERFORMANCE ERROR: Cache too slow ({cache_time}s)."
+            print(f"✅ Pass 2: Memoization verified. Cache time: {cache_time:.6f}s")
+
+    # Execute the async loop.
+    asyncio.run(run_test())
