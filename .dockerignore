@@ -1,0 +1,46 @@
+# --- Security (CRITICAL) ---
+.env
+.env.local
+
+# --- Git & Version Control ---
+.git
+.gitignore
+
+# --- Python Junk ---
+__pycache__
+venv
+env
+*.pyc
+*.pyo
+*.pyd
+
+# --- C++ Build Artifacts (Don't copy Mac binaries to Linux) ---
+*.so
+*.dylib
+*.o
+*.obj
+*.out
+build/
+dist/
+*.egg-info/
+cpp_core/*.so
+cpp_core/*.o
+
+# --- Local Databases (We use Postgres in Cloud) ---
+*.db
+*.sqlite3
+flightrisk.db
+flight_data.db
+
+# --- System & Editor Junk ---
+.DS_Store
+.vscode/
+.idea/
+
+# --- Optimization (Optional) ---
+# We don't need README screenshots in the production app
+assets/
+README.md
+LICENSE
+run_sim_test
+test_cpp.py

@@ -1,89 +1,75 @@
 import sqlite3
+import psycopg2 
+import os
 from datetime import datetime
-from typing import Optional, List, Any
 
-# Import the centralized database path from the configuration file.
-# This ensures we always write to the 'flight_data.db' in the root directory.
-try:
-    from config import DB_PATH
-except ImportError:
-    # Fallback for when running this script directly for testing.
-    from src.config import DB_PATH
+# Railway provides this automatically. If it's missing, we are local.
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-def init_db() -> None:
+def get_connection():
     """
-    Initializes the SQLite schema. Creates the 'trip_history' table if it doesn't exist.
+    Auto-switches between SQLite (Local) and PostgreSQL (Cloud).
     """
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        # Using AUTOINCREMENT for primary keys ensures unique record IDs.
-        cursor.execute('''CREATE TABLE IF NOT EXISTS trip_history (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        run_timestamp TEXT,
-                        flight_number TEXT,
-                        origin TEXT,
-                        destination TEXT,
-                        weather_multiplier REAL,
-                        suggested_departure TEXT,
-                        success_probability REAL,
-                        risk_status TEXT
-                    )''')
-        conn.commit()
-
-def log_trip(
-    flight_num: str, 
-    origin: str, 
-    dest: str, 
-    multiplier: float, 
-    suggested_time: Optional[int], 
-    probability: float, 
-    risk_status: str
-) -> None:
-    """
-    Saves the results of a single stochastic simulation run to the history log.
-    """
-    # Transform Unix epoch to human-readable string for storage.
-    if suggested_time is None:
-        rec_time_str = "UNREACHABLE"
+    if DATABASE_URL:
+        # Cloud Mode (Postgres)
+        return psycopg2.connect(DATABASE_URL, sslmode='require')
     else:
-        rec_time_str = datetime.fromtimestamp(suggested_time).strftime('%Y-%m-%d %H:%M:%S')
+        # Local Mode (SQLite)
+        return sqlite3.connect("flightrisk.db", check_same_thread=False)
 
-    # Implementation: Secure parameterized insertion.
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        query = '''INSERT INTO trip_history 
-                 (run_timestamp, flight_number, origin, destination, 
-                  weather_multiplier, suggested_departure, success_probability, risk_status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'''
-        
-        values = (
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 
-            flight_num.upper(), origin, dest, 
-            multiplier, rec_time_str, probability, risk_status
+def init_db():
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Postgres uses 'SERIAL' for auto-increment IDs
+    # SQLite uses 'INTEGER PRIMARY KEY AUTOINCREMENT'
+    if DATABASE_URL:
+        id_type = "SERIAL PRIMARY KEY"
+    else:
+        id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
+
+    create_query = f'''
+        CREATE TABLE IF NOT EXISTS trips (
+            id {id_type},
+            timestamp TEXT,
+            flight_num TEXT,
+            origin TEXT,
+            destination TEXT,
+            weather_mult REAL,
+            suggested_time INTEGER,
+            probability REAL,
+            risk_status TEXT
         )
-        
-        cursor.execute(query, values)
-        conn.commit()
+    '''
     
-    print(f"\n\033[92m[✓] Record committed to database.\033[0m")
+    cursor.execute(create_query)
+    conn.commit()
+    conn.close()
 
-def view_history(limit: int = 5) -> List[Any]:
-    """
-    Retrieves the most recent trip logs for dashboard rendering.
-    """
-    with sqlite3.connect(DB_PATH) as conn:
-        cursor = conn.cursor()
-        # Sort by ID descending to get the most recent entries first.
-        cursor.execute("SELECT * FROM trip_history ORDER BY id DESC LIMIT ?", (limit,))
-        rows = cursor.fetchall()
+def log_trip(flight_num, origin, dest, multiplier, suggested_time, probability, risk_status):
+    conn = get_connection()
+    cursor = conn.cursor()
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
+    # Postgres uses %s for placeholders, SQLite uses ?
+    # We standardize on %s and replace for SQLite if needed
+    if DATABASE_URL:
+        sql = "INSERT INTO trips (timestamp, flight_num, origin, destination, weather_mult, suggested_time, probability, risk_status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+        cursor.execute(sql, (ts, flight_num, origin, dest, multiplier, suggested_time, probability, risk_status))
+    else:
+        sql = "INSERT INTO trips (timestamp, flight_num, origin, destination, weather_mult, suggested_time, probability, risk_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        cursor.execute(sql, (ts, flight_num, origin, dest, multiplier, suggested_time, probability, risk_status))
+
+    conn.commit()
+    conn.close()
+
+def view_history(limit=20):
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    sql = "SELECT * FROM trips ORDER BY id DESC LIMIT 20"
+    cursor.execute(sql)
+    rows = cursor.fetchall()
+    
+    conn.close()
     return rows
-
-# Local Unit Test Block.
-if __name__ == "__main__":
-    init_db()
-    # Diagnostic Print.
-    history = view_history()
-    print("\nRECENT HISTORY PREVIEW")
-    for entry in history:
-        print(f"ID: {entry[0]} | Flight: {entry[2]} | Success: {entry[7]}%")

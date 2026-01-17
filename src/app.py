@@ -10,7 +10,7 @@ from flight_engine import FlightEngine
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="FlightRisk v4.0",
+    page_title="FlightRisk v4.5",
     page_icon="✈️",
     layout="wide",
     initial_sidebar_state="expanded"
