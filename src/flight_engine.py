@@ -1,4 +1,5 @@
 import aiohttp
+import streamlit as st
 import asyncio
 from datetime import datetime, timedelta
 import config
@@ -20,6 +21,7 @@ class FlightEngine:
         self.base_url = "https://aerodatabox.p.rapidapi.com/flights/number/"
         self.host = "aerodatabox.p.rapidapi.com"
 
+    @st.cache_data(ttl=86400) # Keeps the flight data for 24 hours
     async def get_flight_details(self, flight_number: str) -> Optional[Dict[str, Any]]:
         """
         Coordinates sequential lookups for today and tomorrow to find the 
