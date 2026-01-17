@@ -1,23 +1,44 @@
-# Python & Virtual Environment
+# --- Python & Virtual Environment ---
 venv/
+env/
 __pycache__/
 *.pyc
 
-# Security
+# --- Security ---
 .env
+.env.local
 
-# Operating System Junk
+# --- Operating System Junk ---
 .DS_Store
+Thumbs.db
 
-# Local Data & Databases
+# --- Local Data & Databases ---
 *.db
+*.sqlite3
 flight_data.db
+trip_history.csv
 
-# C++ Compiled Binaries
+# --- C++ Compiled Binaries & Objects ---
 *.so
 *.o
+*.obj
 *.out
-cpp_core/simulation
+*.dylib
+*.pyd
 
-# Generated Assets/Temp Files
+# --- Python Build Artifacts (Important for setup.py) ---
+build/
+dist/
+*.egg-info/
+
+# --- IDE Settings (Optional but Recommended) ---
+.vscode/
+.idea/
+
+# --- Generated Assets/Temp Files ---
 risk_profile_v2.png
+assets/temp/
+
+# --- C++ Core Simulation Test Output ---
+run_sim_test
+cpp_core/simulation
