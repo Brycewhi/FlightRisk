@@ -16,44 +16,47 @@ class WeatherEngine:
 
     def __init__(self) -> None:
         self.api_key = config.OPENWEATHER_API_KEY
-        self.base_url = "https://api.openweathermap.org/data/2.5/weather"
+        self.base_url = "https://api.openweathermap.org/data/3.0/onecall"
         self._cache: Dict[str, Dict] = {}
 
     async def _fetch_point(self, session: aiohttp.ClientSession, lat: float, lon: float, label: str) -> Optional[Dict[str, Any]]:
         """
         Helper: Fetches a single coordinate's weather asynchronously.
-        
-        Args:
-            session: Active aiohttp connection pool.
-            lat: Latitude.
-            lon: Longitude.
-            label: Point identifier (e.g., 'Start', 'Midpoint').
-        Returns:
-            Formatted dictionary containing weather data for the point.
         """
         params: Dict[str, Union[str, float, int]] = {
             "lat": lat,
             "lon": lon,
             "appid": self.api_key,
-            "units": "imperial"
+            "units": "imperial",
+            "exclude": "minutely,hourly,daily,alerts"
         }
         try:
             async with session.get(self.base_url, params=params) as response:
+                # DEBUG: Verifying the live connection in Railway Logs
+                print(f"🌦️ WEATHER DEBUG [{label}] - Status: {response.status}")
+                
                 if response.status == 200:
                     data = await response.json()
-                    weather_list = data.get('weather', [])
+                    
+                    # One Call 3.0 nests current data inside the 'current' key
+                    current = data.get('current', {})
+                    weather_list = current.get('weather', [])
                     condition = weather_list[0]['main'] if weather_list else "Clear"
                     
                     return {
                         "label": label,
                         "data": {
-                            "temp": data['main']['temp'],
+                            "temp": current.get('temp', 0), # Accessing 'current' block
                             "condition": condition,
                             "description": weather_list[0]['description'] if weather_list else "no data",
-                            "location_name": data.get('name', label)
+                            "location_name": label 
                         }
                     }
-                return None
+                else:
+                    # Logs exact reason if the call fails (e.g. 401 Unauthorized)
+                    error_text = await response.text()
+                    print(f"❌ WEATHER API ERROR: {response.status} - {error_text}")
+                    return None
         except Exception as e:
             print(f"⚠️ Weather API Error at {label}: {e}")
             return None
@@ -61,15 +64,8 @@ class WeatherEngine:
     async def get_route_weather(self, encoded_polyline: str, session: aiohttp.ClientSession) -> Optional[Dict[str, Any]]:
         """
         Samples atmospheric conditions at Origin, Midpoint, and Destination simultaneously.
-        
-        Args:
-            encoded_polyline: Compressed Google Maps route geometry.
-            session: Active aiohttp ClientSession.
-        Returns:
-            Corridor weather report or None if spatial sampling fails.
         """
         try:
-            # Memoization lookup to prevent redundant network I/O.
             if encoded_polyline in self._cache:
                 return self._cache[encoded_polyline]
 
@@ -77,37 +73,34 @@ class WeatherEngine:
             if not coordinates:
                 return None
 
-            # Map sampling waypoints to indices.
             points_map = {
                 "Start": 0,
                 "Midpoint": len(coordinates) // 2,
                 "Destination": len(coordinates) - 1
             }
 
-            # Create Async Tasks (The Parallel Magic).
             tasks = []
             for label, index in points_map.items():
                 lat, lon = coordinates[index]
                 tasks.append(self._fetch_point(session, lat, lon, label))
 
-            # Fire all requests at once and wait for them to finish.
-            results = await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks) 
 
-            # Process Results.
             report: Dict[str, Any] = {}
             for res in results:
                 if res:
                     report[res['label']] = res['data']
 
-            # Only return if we got data for all 3 points (or at least some data).
             if report:
-                self._cache[encoded_polyline] = report # Commit to cache.
+                self._cache[encoded_polyline] = report
                 return report
             return None
             
         except Exception as e:
             print(f"Weather Engine System Error: {e}")
             return None
+
+# Local Unit Test Block remains unchanged...
 
 # Local Unit Test Block.
 if __name__ == "__main__":
