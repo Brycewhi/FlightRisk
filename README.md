@@ -120,7 +120,7 @@ If you are on macOS, ensure you have the command line tools installed:
 xcode-select --install
 ```
 
--- 
+---
 
 ### 📈 Roadmap
 
