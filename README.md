@@ -58,24 +58,33 @@ The system aggregates 100,000 samples from the engines to generate a **Probabili
 ```text
 FlightRisk/
 ├── assets/                 # UI Screenshots and static images
+├── build/                  # C++ Build artifacts (Generated)
 ├── cpp_core/               # C++ Source Code
-│   └── simulation.cpp      # The Monte Carlo Engine
+│   └── simulation.cpp      # The Monte Carlo Engine core logic
 ├── src/                    # Python Application Logic
-│   ├── app.py              # Async Streamlit Entry Point
+│   ├── airport_engine.py   # TSA Queue Theory & Gamma Distribution logic
+│   ├── app.py              # Async Streamlit Entry Point (Frontend)
+│   ├── async_benchmark.py  # Performance testing & latency analysis
+│   ├── config.py           # Centralized API & Environment configuration
+│   ├── database.py         # SQLite Persistence Layer & History logic
+│   ├── flight_engine.py    # Async AeroDataBox API Integration
+│   ├── main.py             # Application logic orchestrator
+│   ├── risk_engine.py      # Hybrid Engine (Python + C++ Bindings)
 │   ├── solver.py           # Async Orchestrator & Binary Search
 │   ├── traffic_engine.py   # Async Google Maps Integration
-│   ├── weather_engine.py   # Async OpenWeather Integration
-│   ├── flight_engine.py    # Async Flight Status Lookup
-│   ├── risk_engine.py      # Hybrid Engine (Python Logic + C++ Bindings)
-│   ├── airport_engine.py   # TSA Queue Theory Logic (CPU Bound)
-│   ├── database.py         # SQLite Persistence Layer
-│   └── visualizer.py       # Data visualization & Plotting logic
-├── Dockerfile              # Containerization instructions
+│   ├── visualizer.py       # Seaborn/Matplotlib KDE plotting logic
+│   └── weather_engine.py   # Async OpenWeather One Call 3.0 Integration
 ├── .dockerignore           # Docker build exclusions
-├── flightrisk.db           # Main simulation & risk history DB
+├── .env                    # Local environment variables (Hidden)
+├── .gitignore              # Git version control exclusions
+├── Dockerfile              # Containerization instructions
 ├── flight_data.db          # Cached flight status & quota protection DB
-├── setup.py                # C++ Compilation Script
-└── requirements.txt        # Python Dependencies
+├── flightrisk.db           # Main simulation & risk history DB
+├── LICENSE                 # Project MIT License
+├── README.md               # Project documentation
+├── requirements.txt        # Python Dependencies
+├── setup.py                # C++ Compilation & pybind11 script
+└── test_cpp.py             # Unit tests for C++ extension verification
 ```
 
 ---
