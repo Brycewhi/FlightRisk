@@ -17,6 +17,8 @@ Standard navigation apps tell you when you will arrive on average. But if a $400
 
 **FlightRisk v4.5** is a full-stack predictive engine that replaces static estimates with a **100,000 Monte Carlo simulation**, accounting for traffic volatility, terminal congestion, and hyper-local weather. It utilizes a **Hybrid Architecture (Async Python + Compiled C++)** to perform these simulations with <2.5s total latency.
 
+---
+
 ## 🧠 The Statistical Stack (How it Works)
 
 I built this project to apply Queue Theory, Stochastic Modeling, and Async Concurrency to a real-world logistics problem. The system fuses four specialized engines:
@@ -40,12 +42,16 @@ The system aggregates 100,000 samples from the engines to generate a **Probabili
 * **Performance:** The core simulation loop is offloaded to a compiled **C++ Extension (`flightrisk_cpp`)** via **pybind11**.
 * **Stochastic Labeling:** Automatically maps simulation outcomes to **Risk Status** labels (Conservative, Balanced, Aggressive) to provide instant user interpretability.
 
+---
+
 ## 🖥️ Technical Walkthrough: The UI
 
 * **Non-Blocking UI:** The Streamlit frontend uses an **Async Wrapper** pattern to prevent UI freezing while orchestrating 20+ API calls in parallel.
 * **Persistence Layer:** Every simulation is persisted to a **SQLite** database, allowing users to track risk trends and compare departure windows in the **History Tab**.
 * **The "Certainty Arrival" Metric:** Displays the 95th percentile worst-case arrival time, offering a statistical guarantee rather than a simple average.
 * **KDE Risk Profile:** A Seaborn-rendered plot that visually separates the Safe Zone (green) from the Missed Flight Zone (red).
+
+---
 
 ## 🛠 File Architecture (Modular OOP)
 
@@ -71,6 +77,9 @@ FlightRisk/
 ├── setup.py                # C++ Compilation Script
 └── requirements.txt        # Python Dependencies
 ```
+
+---
+
 ## 🚢 Deployment
 
 This project is containerized for consistent deployment across environments:
@@ -81,6 +90,8 @@ This project is containerized for consistent deployment across environments:
    docker run -p 8501:8501 --env-file .env flightrisk
 2. **Cloud Deployment (Railway/Render):** The repository is configured for automatic deployment via the included Dockerfile. Ensure your TZ environment variable is set to America/New_York to maintain timezone synchronization across the stochastic engines.
 
+---
+
 ## 📈 Machine Learning Roadmap (v5.0)
 
 While the current engine uses high-fidelity stochastic modeling, the next phase involves replacing static multipliers with **Learned Feature Sets**:
@@ -89,7 +100,8 @@ While the current engine uses high-fidelity stochastic modeling, the next phase 
 * **Dynamic Weather Weighting:** Replace static condition penalties with a model trained on historical precipitation data (mm/hr) to predict the exact roadway speed reduction.
 * **Stochastic Tuning:** Use **Bayesian Optimization** to dynamically adjust the Shape ($\alpha$) and Scale ($\beta$) parameters of the AirportEngine’s Gamma distributions based on real-time "Late Arrival" feedback loops.
 
-```markdown
+---
+
 ## 🚦 Installation
 
 1.  **Clone:**
