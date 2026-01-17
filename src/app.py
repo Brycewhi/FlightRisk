@@ -42,15 +42,12 @@ def parse_flexible_time(time_str):
     return None
 
 def normalize_output(report, departure_dt, flight_dt):
-    """Normalizes the raw backend report into UI-friendly metrics."""
     p95_eta = report.get('p95_eta', 0)
     avg_eta = report.get('avg_eta', 0)
     
     gate_close_dt = flight_dt - timedelta(minutes=15)
     
-    # "Certainty Time" = The time we are 95% sure you will arrive by
     worst_case_arrival = departure_dt + timedelta(minutes=p95_eta)
-    
     median_arrival = departure_dt + timedelta(minutes=avg_eta)
     
     is_late = worst_case_arrival > gate_close_dt
@@ -91,14 +88,9 @@ async def run_simulation_async(
     check_bags, tsa_pre, 
     threshold, buffer
 ):
-    """
-    Orchestrates the Async Solver logic.
-    RETURNS: (report, opt_epoch, dead_epoch)
-    """
     final_depart_epoch = depart_epoch
     dead_epoch_val = None
     
-    # 1. If mode is "Suggest", run the optimizer first
     if mode == "Suggest Best Departure":
         opt_epoch, dead_epoch_val = await solver.find_optimal_departure(
             origin, destination, flight_epoch, 
@@ -107,10 +99,9 @@ async def run_simulation_async(
             buffer_minutes=buffer
         )
         if not opt_epoch:
-            return None, None, None # Signal failure
+            return None, None, None
         final_depart_epoch = opt_epoch
 
-    # 2. Run the full analysis on the specific time
     report = await solver.run_full_analysis(
         origin, destination, final_depart_epoch, flight_epoch, 
         check_bags, tsa_pre, buffer_minutes=buffer
@@ -122,7 +113,6 @@ async def run_simulation_async(
 
 tab_sim, tab_hist = st.tabs(["🚀 Risk Simulation", "📜 Trip History"])
 
-# Sidebar
 with st.sidebar:
     st.header("✈️ Trip Parameters")
     
@@ -149,7 +139,7 @@ with st.sidebar:
         else:
             st.error("Flight not found.")
 
-    origin = st.text_area("Starting Address", value="Empire State Building, NY")
+    origin = st.text_input("Starting Address", value="Empire State Building, NY")
     destination = st.text_input("Airport", value=st.session_state.dest_val)
     
     col_date, col_time = st.columns(2)
@@ -193,11 +183,10 @@ with st.sidebar:
 # --- DASHBOARD LOGIC ---
 with tab_sim:
     if run_btn:
-        with st.spinner("🚀 Simulating 100,000 travel scenarios to determine optimal departure & risk details..."):
+        with st.spinner("🚀 Simulating 100,000 travel scenarios..."):
             
             start_t = time.time()
             
-            # ASYNC ACTION: Run Simulation
             raw_report, final_epoch, dead_epoch = asyncio.run(run_simulation_async(
                 mode, origin, destination, 
                 depart_epoch, flight_epoch, 
@@ -228,7 +217,6 @@ with tab_sim:
                 risk_status=data['risk_label']
             )
 
-        # 1. Top Status Banner
         if data['is_late']:
             st.error(f"🚨 **HIGH RISK** — {data['late_minutes']}m late")
             with st.expander("💡 Rescue Plan", expanded=True):
@@ -242,33 +230,21 @@ with tab_sim:
 
         st.markdown("---")
         
-        # 2. Key Metrics
         c1, c2, c3, c4, c5 = st.columns(5)
         
-        # Metric 1: When you leave (The Suggestion)
         c1.metric("Suggested Departure", final_dt.strftime("%I:%M %p"))
-
-        # Metric 2: When you arrive (95% Certainty)
-        # This replaces "Worst Case" with "Certainty Arrival"
         c2.metric("🛡️ Certainty Arrival", data['worst_case_arrival'].strftime("%I:%M %p"), help="95% Confidence you arrive by this time")
-
-        # Metric 3: The Hard Deadline
         c3.metric("Gate Closes", data['gate_close_dt'].strftime("%I:%M %p"), help="Flights close 15m before departure")
         
-        # Metric 4: The Risk Ceiling (Drop Dead)
         if dead_epoch:
             dead_dt = datetime.fromtimestamp(dead_epoch)
             c4.metric("💀 Drop Dead", dead_dt.strftime("%I:%M %p"), help="If you leave after this, you will almost certainly miss the flight.")
         else:
             c4.metric("Drop Dead", "N/A")
 
-        # Metric 5: Buffer
         c5.metric("Time to Kill", f"{data['time_to_kill']}m")
-        
-        # Processing time in caption
         st.caption(f"⚡ Monte Carlo Simulation processed in {duration:.2f} seconds.")
 
-        # 3. Visualization & Breakdown
         col_chart, col_breakdown = st.columns([2, 1])
         
         with col_chart:
@@ -299,7 +275,6 @@ with tab_sim:
     else:
         st.info("👈 Enter flight details in the sidebar and click 'Run Simulation'")
 
-# --- HISTORY TAB ---
 with tab_hist:
     st.header("📜 Recent Trip History")
     st.write("Review your previously logged simulations below.")
