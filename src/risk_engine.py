@@ -151,10 +151,20 @@ class RiskEngine:
         else:
             breakdown = {"drive": 45, "tsa": 20, "walk": 10}
 
+        if success_prob >= 95:
+            risk_label = "VERY LOW"
+        elif success_prob >= 80:
+            risk_label = "LOW"
+        elif success_prob >= 60:
+            risk_label = "MODERATE"
+        else:
+            risk_label = "CRITICAL"
+
         return {
             "avg_eta": round(avg_eta, 1),
             "p95_eta": round(p95_eta, 1),
             "success_probability": round(success_prob, 1),
+            "risk": risk_label,
             "buffer_remaining": round(safety_buffer, 1),
             "multiplier": impact_mean,
             "condition": condition,
