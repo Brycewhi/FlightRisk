@@ -1,7 +1,8 @@
-# ✈️ FlightRisk v4.0: Stochastic Travel Intelligence
+# ✈️ FlightRisk v4.5: High-Frequency Stochastic Travel Intelligence
 ### *Because "Average ETA" is a gamble. Predict your risk with 95% certainty.*
 
 [![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org)
+[![AsyncIO](https://img.shields.io/badge/Architecture-AsyncIO-green.svg)](https://docs.python.org/3/library/asyncio.html)
 [![Streamlit](https://img.shields.io/badge/UI-Streamlit-FF4B4B.svg)](https://streamlit.io)
 [![C++11](https://img.shields.io/badge/C++-11-00599C.svg)](https://isocpp.org/)
 [![pybind11](https://img.shields.io/badge/build-pybind11-yellow.svg)](https://github.com/pybind/pybind11)
@@ -12,27 +13,27 @@
 
 Standard navigation apps tell you when you'll arrive *on average*. But if a $400 flight closes its gate in 60 minutes, the average doesn't matter—the **tail-end risk** does. 
 
-**FlightRisk v4.0** is a full-stack predictive engine that replaces static estimates with a **100,000 Monte Carlo simulation**, accounting for traffic volatility, terminal congestion, and hyper-local weather. It utilizes a **Hybrid Python/C++ Architecture** to perform these simulations 300x faster than standard Python implementations.
+**FlightRisk v4.5** is a full-stack predictive engine that replaces static estimates with a **100,000 Monte Carlo simulation**, accounting for traffic volatility, terminal congestion, and hyper-local weather. It utilizes a **Hybrid Architecture (Async Python + Compiled C++)** to perform these simulations with <2.5s total latency.
 
 ---
 
 ## 🧠 The Statistical Stack (How it Works)
 
-I built this project to apply **Queue Theory** and **Stochastic Modeling** to a real-world logistics problem. The system fuses four specialized engines:
+I built this project to apply **Queue Theory**, **Stochastic Modeling**, and **Async Concurrency** to a real-world logistics problem. The system fuses four specialized engines:
 
-### 1. 🚦 TrafficEngine (Triangular Distribution)
-Fetches data from the **Google Directions API** (Optimistic, Best Guess, and Pessimistic durations). 
+### 1. 🚦 Async TrafficEngine (Triangular Distribution)
+Uses **`aiohttp`** to fetch three parallel data models from the **Google Directions API** (Optimistic, Best Guess, and Pessimistic) simultaneously.
 * It treats these as `min`, `mode`, and `max` values to build a **Triangular Distribution**.
-* This simulates the reality that traffic delays are "right-skewed"—it is mathematically easier to be 20 minutes late than 20 minutes early.
+* **Upgrade:** By parallelizing requests, network latency was reduced by **66%**, allowing for real-time iterative searching.
 
-### 2. ⛈️ WeatherEngine (Gaussian Noise Factor)
-Uses the **OpenWeather API** to perform spatial sampling along the route polyline.
-* Weather severity at the origin and airport is mapped to a **Normal Distribution**.
+### 2. ⛈️ Async WeatherEngine (Gaussian Noise Factor)
+Performs parallel spatial sampling along the route polyline using the **OpenWeather API**.
+* Weather severity at the origin, midpoint, and airport is mapped to a **Normal Distribution**.
 * This acts as a "Volatility Multiplier" on the traffic data, expanding the variance during active storms.
 
-### 3. ✈ AirportEngine (Gamma Distribution Queue Theory)
-Airport wait times (TSA, Bag Drop, Check-in) follow a **Gamma Distribution** to model the "long-tail" risk of unexpected bottlenecks.
-* **Tiered Logic:** The model distinguishes between **Tier 1 Hubs** (JFK, ATL) and **Tier 2 Regional** airports to adjust wait-time variance.
+### 3. ✈ FlightEngine & AirportEngine (Queue Theory)
+* **FlightEngine (Async):** Validates live flight status and gate closures via **AeroDataBox API** without blocking the solver loop.
+* **AirportEngine (CPU-Bound):** Airport wait times (TSA, Bag Drop, Check-in) follow a **Gamma Distribution** to model the "long-tail" risk of bottlenecks. It distinguishes between **Tier 1 Hubs** (JFK, ATL) and **Tier 2 Regional** airports.
 
 ### 4. 🧮 RiskEngine (Hybrid C++ Monte Carlo Core)
 The system aggregates 100,000 samples from the engines to generate a **Probability Density Function (PDF)**.
@@ -43,18 +44,18 @@ The system aggregates 100,000 samples from the engines to generate a **Probabili
 
 ## 🖥️ Technical Walkthrough: The UI
 
-The v4.0 Dashboard is designed for high-stakes decision-making, emphasizing **interpretability** and **actionability**:
+The v4.5 Dashboard is designed for high-stakes decision-making, emphasizing **interpretability** and **responsiveness**:
 
+* **Non-Blocking UI:** The Streamlit frontend uses an **Async Wrapper** pattern to prevent UI freezing while the backend orchestrates 20+ API calls in parallel.
 * **Interactive Risk Sliders:** Allows users to choose between *Conservative* (95% confidence), *Balanced* (85%), or *Aggressive* (75%) strategies.
-* **The "Leave Now" Mode:** Calculates the immediate probability of arrival based on current system time for travelers in transit.
-* **KDE Risk Profile:** A Seaborn-rendered plot that visually separates the "Safe Zone" (green) from the "Missed Flight Zone" (red) relative to strict gate-closure deadlines.
-* **Trip History:** A persistence-backed tab utilizing **Pandas** to display previous runs from the **SQLite** database, allowing for CSV export and auditability.
+* **The "Certainty Arrival" Metric:** Displays the 95th percentile worst-case arrival time, offering a statistical guarantee rather than a simple average.
+* **KDE Risk Profile:** A Seaborn-rendered plot that visually separates the "Safe Zone" (green) from the "Missed Flight Zone" (red).
 
 ---
 
 ## 🔌 API & Data Integration
 
-FlightRisk is powered by a live data-fusion pipeline:
+FlightRisk is powered by a high-concurrency data-fusion pipeline:
 * **Google Directions API:** Real-time traffic, distance, and route polylines.
 * **OpenWeather API:** Real-time weather conditions for origin and destination coordinates.
 * **AeroDataBox API:** Live flight status lookups and automated **-15m Gate Closure** deadline calculation.
@@ -71,16 +72,18 @@ FlightRisk/
 ├── cpp_core/               # C++ Source Code
 │   └── simulation.cpp      # The Monte Carlo Engine
 ├── src/                    # Python Application Logic
-│   ├── app.py              # Main Streamlit Dashboard
-│   ├── solver.py           # Recursive Departure Optimization Algorithm
-│   ├── traffic_engine.py   # Google Maps Integration
-│   ├── weather_engine.py   # OpenWeather Integration
+│   ├── app.py              # Async Streamlit Entry Point
+│   ├── solver.py           # Async Orchestrator & Binary Search
+│   ├── traffic_engine.py   # Async Google Maps Integration
+│   ├── weather_engine.py   # Async OpenWeather Integration
+│   ├── flight_engine.py    # Async Flight Status Lookup
 │   ├── risk_engine.py      # Hybrid Engine (Python Logic + C++ Bindings)
-│   ├── airport_engine.py   # TSA Queue Theory Logic
+│   ├── airport_engine.py   # TSA Queue Theory Logic (CPU Bound)
 │   └── database.py         # SQLite Persistence Layer
 ├── setup.py                # C++ Compilation Script
 └── requirements.txt        # Python Dependencies
 ```
+
 ---
 
 ## 🚦 Installation
@@ -117,15 +120,14 @@ If you are on macOS, ensure you have the command line tools installed:
 xcode-select --install
 ```
 
----
+-- 
 
-## 📈 Roadmap
+### 📈 Roadmap
 
-* **v4.0 [COMPLETED]:** High-Performance C++ Core via `pybind11` (300x Speedup).
-* **v4.5:** Implement `asyncio` to parallelize multi-engine API requests for reduced network latency.
 * **v5.0 [ML Feedback Layer]:**
-    * Implement a regression model to analyze `trip_history` data from SQLite.
-    * Use actual vs. predicted arrival deltas to dynamically tune the **Shape ($\alpha$)** and **Scale ($\beta$)** parameters of the AirportEngine’s Gamma distributions.
+    * **Traffic Calibration:** Train a regression model to correct systematic bias in Google's "Pessimistic" estimates (e.g., detecting if rush hour is consistently worse than predicted).
+    * **Weather Impact Learning:** Replace static weather penalties with a learned model that correlates specific precipitation levels (mm/hr) to actual roadway speed reductions.
+    * **Queue Theory Tuning:** Dynamically optimize the **Shape ($\alpha$)** and **Scale ($\beta$)** of the AirportEngine’s Gamma distributions based on historical "Late Arrival" rates.
 
 ---
 **Developed by Bryce Whiteside** *Applied Mathematics & Computer Science | Stony Brook University* [![GitHub](https://img.shields.io/badge/GitHub-Brycewhi-181717?logo=github)](https://github.com/Brycewhi)
