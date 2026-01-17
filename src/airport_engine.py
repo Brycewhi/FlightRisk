@@ -41,9 +41,9 @@ class AirportEngine:
         if tier == 1:
             return 15.0, 4.0  # High chaos (e.g. JFK).
         elif tier == 2:
-            return 10.0, 2.0  # Moderate.
+            return 9.0, 2.0  # Moderate.
         else:
-            return 4, 1.0  # Efficient (e.g. ISP).
+            return 3.0, 1.5  # Efficient (e.g. ISP).
 
     def _get_time_multiplier(self, dt_object: datetime) -> float:
         """Calculates congestion factor based on hour of day (Rush Hour logic)."""
@@ -78,9 +78,9 @@ class AirportEngine:
             
         tier = self._get_tier(airport_code)
         
-        if tier == 1: avg, scale = 18, 4.0
-        elif tier == 2: avg, scale = 10, 2.0
-        else: avg, scale = 5, 1.0
+        if tier == 1: avg, scale = 13, 4.0
+        elif tier == 2: avg, scale = 9.0, 2.0
+        else: avg, scale = 3.0, 1.0
 
         if epoch_time:
             dt = datetime.fromtimestamp(epoch_time)
