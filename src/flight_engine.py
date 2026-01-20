@@ -1,9 +1,11 @@
 import aiohttp
 import streamlit as st
 import asyncio
+import os
 from datetime import datetime, timedelta
 import config
 from typing import Optional, Dict, Any, List
+from mocks import get_mock_flight_data  # Mock Data Import
 
 class FlightEngine:
     """
@@ -22,22 +24,34 @@ class FlightEngine:
         self.host = "aerodatabox.p.rapidapi.com"
 
     @st.cache_data(ttl=86400) # Keeps the flight data for 24 hours
-    async def get_flight_details(self, flight_number: str) -> Optional[Dict[str, Any]]:
+    async def get_flight_details(_self, flight_number: str) -> Optional[Dict[str, Any]]:
         """
         Coordinates sequential lookups for today and tomorrow to find the 
         next available flight departure.
+        Includes a Safety Lock to prevent accidental API credit usage during dev.
         """
+        
+        # SAFETY LOCK 
+        # Unless this environment variable is EXACTLY "True", use mock.
+        # This prevents going over API limits.
+        if os.getenv("USE_REAL_DATA_DANGEROUS") != "True":
+            print(f"SAFE MODE: Using Mock Data for {flight_number}")
+            return get_mock_flight_data(flight_number)
+
+        # REAL API CALL (Only executes if unlocked)
+        print(f"Fetching real-time data for {flight_number}...")
+        
         async with aiohttp.ClientSession() as session:
             # Search today's flights first (current date UTC/local).
             today_date: str = datetime.now().strftime('%Y-%m-%d')
-            result = await self._fetch_and_parse(session, flight_number, today_date)
+            result = await _self._fetch_and_parse(session, flight_number, today_date)
             
             if result:
                 return result
 
             # Roll over to tomorrow if no future flights remain today.
             tomorrow_date: str = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-            return await self._fetch_and_parse(session, flight_number, tomorrow_date)
+            return await _self._fetch_and_parse(session, flight_number, tomorrow_date)
 
     async def _fetch_and_parse(
         self, 
@@ -121,9 +135,11 @@ if __name__ == "__main__":
         test_num = "B6454" 
         print(f"✈️ Validating Flight {test_num}...")
         
+        # NOTE: This will return Mock Data if env var is not set!
         res = await fe.get_flight_details(test_num)
         
         if res:
+            # We use datetime.fromtimestamp because the engine returns raw integers
             departure = datetime.fromtimestamp(res['dep_ts']).strftime('%I:%M %p')
             print(f"✅ Flight {test_num} validated: {res['origin_airport']} at {departure}")
         else:

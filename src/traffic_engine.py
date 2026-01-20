@@ -1,7 +1,9 @@
 import aiohttp
 import asyncio
 import config
+import os  
 from typing import Optional, Dict, Union, Any
+from mocks import get_mock_traffic # Mock Data Import
 
 class TrafficEngine:
     """
@@ -92,6 +94,13 @@ class TrafficEngine:
             - 'max' (pessimistic minutes)
             - 'polyline' (from best_guess route)
         """
+        
+        
+        #  SAFETY LOCK for preserving API calls.
+        # If 'USE_MOCK_DATA' is True, we skip Google entirely.
+        if os.getenv("USE_MOCK_DATA") == "True":
+            return get_mock_traffic()
+
         async with aiohttp.ClientSession() as session:
             # 1. Define the 3 tasks.
             task_opt = self._fetch_single_route(session, origin, destination, "optimistic", departure_time)
@@ -135,6 +144,7 @@ if __name__ == "__main__":
         print(f"Fetching PARALLEL traffic models for: {home} -> {jfk}")
         start = time.time()
         
+        # This will return Mock Data if env var is set
         data = await engine.get_traffic_metrics(home, jfk)
         
         duration = time.time() - start

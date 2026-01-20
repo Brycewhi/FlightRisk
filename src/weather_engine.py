@@ -3,7 +3,9 @@ import asyncio
 import polyline
 import config
 import time
+import os 
 from typing import Dict, Optional, Any, Union
+from mocks import get_mock_weather # Mock Data Import
 
 class WeatherEngine:
     """
@@ -32,9 +34,8 @@ class WeatherEngine:
         }
         try:
             async with session.get(self.base_url, params=params) as response:
-                # DEBUG: Verifying the live connection in Railway Logs
+                # Verifying the live connection in Railway Logs
                 print(f"🌦️ WEATHER DEBUG [{label}] - Status: {response.status}")
-                
                 if response.status == 200:
                     data = await response.json()
                     
@@ -65,6 +66,12 @@ class WeatherEngine:
         """
         Samples atmospheric conditions at Origin, Midpoint, and Destination simultaneously.
         """
+        
+        # SAFETY LOCK to ensure we don't hit the live API during certain test scenarios.
+        # If 'USE_MOCK_DATA' is True, we skip OpenWeather entirely.
+        if os.getenv("USE_MOCK_DATA") == "True":
+            return get_mock_weather()
+
         try:
             if encoded_polyline in self._cache:
                 return self._cache[encoded_polyline]
@@ -100,8 +107,6 @@ class WeatherEngine:
             print(f"Weather Engine System Error: {e}")
             return None
 
-# Local Unit Test Block remains unchanged...
-
 # Local Unit Test Block.
 if __name__ == "__main__":
     async def run_test():
@@ -115,6 +120,7 @@ if __name__ == "__main__":
         # We must create the session here to pass it in.
         async with aiohttp.ClientSession() as session:
             # Test 1: Functional Integration.
+            # If USE_MOCK_DATA=True, this will return the mock data instantly.
             report_1 = await test_engine.get_route_weather(sample_polyline, session)
             
             # Assertions: Validating that the engine didn't fail.

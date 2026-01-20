@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd 
 import asyncio
 import time
+import os  
 from datetime import datetime, timedelta
 import solver
 import database 
@@ -115,6 +116,10 @@ tab_sim, tab_hist = st.tabs(["🚀 Risk Simulation", "📜 Trip History"])
 
 with st.sidebar:
     st.header("✈️ Trip Parameters")
+
+    # Shows the user if they are running on Mock Data (Free) or Real API (Paid)
+    if os.getenv("USE_REAL_DATA_DANGEROUS") != "True":
+        st.warning("SAFE MODE ACTIVE: Using Simulated Data")
     
     col_input, col_btn = st.columns([2, 1])
     with col_input:
@@ -123,17 +128,27 @@ with st.sidebar:
         st.write(""); st.write("") 
         load_flight = st.button("🔍 Load")
 
+    # Initialize Session State
     if 'dest_val' not in st.session_state: st.session_state.dest_val = "JFK Airport"
     if 'time_str' not in st.session_state: 
         st.session_state.time_str = (datetime.now() + timedelta(hours=4)).strftime("%I:%M %p")
+    # Track date in session state
+    if 'date_val' not in st.session_state: st.session_state.date_val = datetime.now()
     
     if load_flight:
         with st.spinner("Fetching Live Flight Data..."):
             flight_data = asyncio.run(get_flight_async(flight_num))
             
         if flight_data:
+            # Update all inputs based on the API/Mock response
             st.session_state.dest_val = flight_data['origin_airport'] 
-            st.session_state.time_str = datetime.fromtimestamp(flight_data['dep_ts']).strftime("%I:%M %p")
+            
+            # Convert the Integer Timestamp (from Mock/API) to Python Datetime
+            dt_obj = datetime.fromtimestamp(flight_data['dep_ts'])
+            
+            st.session_state.time_str = dt_obj.strftime("%I:%M %p")
+            st.session_state.date_val = dt_obj.date() # Sync date
+            
             st.success("Flight Loaded!")
             st.rerun()
         else:
@@ -144,7 +159,8 @@ with st.sidebar:
     
     col_date, col_time = st.columns(2)
     with col_date:
-        flight_date = st.date_input("Flight Date", value=datetime.now())
+        # Use session state for value so it updates when "Load" is clicked
+        flight_date = st.date_input("Flight Date", value=st.session_state.date_val)
     with col_time:
         flight_time_input = st.text_input("Flight Time", value=st.session_state.time_str)
     
