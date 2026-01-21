@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 
 # Internal Imports
 import database
-from solver import Solver # Import the Class, not just the module
+from solver import Solver 
 from visualizer import Visualizer
 from flight_engine import FlightEngine
 
