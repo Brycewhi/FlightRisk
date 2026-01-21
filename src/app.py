@@ -3,8 +3,11 @@ import pandas as pd
 import asyncio
 import time
 import os  
+import aiohttp 
 from datetime import datetime, timedelta
-import solver
+
+# Internal Module Imports
+import solver 
 import database 
 from visualizer import Visualizer
 from flight_engine import FlightEngine 
@@ -17,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize database
+# Initialize database schema
 database.init_db()
 
 # --- CUSTOM CSS ---
@@ -28,6 +31,7 @@ st.markdown("""
     figure { background: transparent !important; }
     .stTabs [data-baseweb="tab-list"] { gap: 24px; }
     .stTabs [data-baseweb="tab"] { height: 50px; font-weight: bold; font-size: 18px; }
+    div.row-widget.stButton > button { width: 100%; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -80,8 +84,10 @@ def normalize_output(report, departure_dt, flight_dt):
 # --- ASYNC WRAPPERS ---
 
 async def get_flight_async(flight_num):
-    fe = FlightEngine()
-    return await fe.get_flight_details(flight_num)
+    """Fetches flight data using a temporary session."""
+    async with aiohttp.ClientSession() as session:
+        fe = FlightEngine()
+        return await fe.get_flight_details(session, flight_num)
 
 async def run_simulation_async(
     mode, origin, destination, 
@@ -89,24 +95,34 @@ async def run_simulation_async(
     check_bags, tsa_pre, 
     threshold, buffer
 ):
+    """
+    Orchestrates the Solver Class. 
+    Instantiates Solver and manages the aiohttp Session.
+    """
+    s = solver.Solver() # Instantiate Class
     final_depart_epoch = depart_epoch
     dead_epoch_val = None
     
-    if mode == "Suggest Best Departure":
-        opt_epoch, dead_epoch_val = await solver.find_optimal_departure(
-            origin, destination, flight_epoch, 
-            check_bags, tsa_pre, 
-            risk_threshold=threshold, 
-            buffer_minutes=buffer
-        )
-        if not opt_epoch:
-            return None, None, None
-        final_depart_epoch = opt_epoch
+    # Open ONE session for all operations
+    async with aiohttp.ClientSession() as session:
+        
+        if mode == "Suggest Best Departure":
+            opt_epoch, dead_epoch_val = await s.find_optimal_departure(
+                origin, destination, flight_epoch, 
+                check_bags, tsa_pre, 
+                risk_threshold=threshold, 
+                buffer_minutes=buffer
+            )
+            if not opt_epoch:
+                return None, None, None
+            final_depart_epoch = opt_epoch
 
-    report = await solver.run_full_analysis(
-        origin, destination, final_depart_epoch, flight_epoch, 
-        check_bags, tsa_pre, buffer_minutes=buffer
-    )
+        # Run final analysis
+        report = await s.run_full_analysis(
+            session, # Pass session
+            origin, destination, final_depart_epoch, flight_epoch, 
+            check_bags, tsa_pre, buffer_minutes=buffer
+        )
     
     return report, final_depart_epoch, dead_epoch_val
 
@@ -117,7 +133,6 @@ tab_sim, tab_hist = st.tabs(["🚀 Risk Simulation", "📜 Trip History"])
 with st.sidebar:
     st.header("✈️ Trip Parameters")
 
-    # Shows the user if they are running on Mock Data (Free) or Real API (Paid)
     if os.getenv("USE_REAL_DATA_DANGEROUS") != "True":
         st.warning("SAFE MODE ACTIVE: Using Simulated Data")
     
@@ -128,11 +143,10 @@ with st.sidebar:
         st.write(""); st.write("") 
         load_flight = st.button("🔍 Load")
 
-    # Initialize Session State
+    # Initialize Sidebar State
     if 'dest_val' not in st.session_state: st.session_state.dest_val = "JFK Airport"
     if 'time_str' not in st.session_state: 
         st.session_state.time_str = (datetime.now() + timedelta(hours=4)).strftime("%I:%M %p")
-    # Track date in session state
     if 'date_val' not in st.session_state: st.session_state.date_val = datetime.now()
     
     if load_flight:
@@ -140,15 +154,10 @@ with st.sidebar:
             flight_data = asyncio.run(get_flight_async(flight_num))
             
         if flight_data:
-            # Update all inputs based on the API/Mock response
             st.session_state.dest_val = flight_data['origin_airport'] 
-            
-            # Convert the Integer Timestamp (from Mock/API) to Python Datetime
             dt_obj = datetime.fromtimestamp(flight_data['dep_ts'])
-            
             st.session_state.time_str = dt_obj.strftime("%I:%M %p")
-            st.session_state.date_val = dt_obj.date() # Sync date
-            
+            st.session_state.date_val = dt_obj.date()
             st.success("Flight Loaded!")
             st.rerun()
         else:
@@ -159,7 +168,6 @@ with st.sidebar:
     
     col_date, col_time = st.columns(2)
     with col_date:
-        # Use session state for value so it updates when "Load" is clicked
         flight_date = st.date_input("Flight Date", value=st.session_state.date_val)
     with col_time:
         flight_time_input = st.text_input("Flight Time", value=st.session_state.time_str)
@@ -198,7 +206,9 @@ with st.sidebar:
 
 # --- DASHBOARD LOGIC ---
 with tab_sim:
+    # 1. RUN SIMULATION LOGIC
     if run_btn:
+        st.session_state['has_run'] = True
         with st.spinner("🚀 Simulating 100,000 travel scenarios..."):
             
             start_t = time.time()
@@ -213,17 +223,25 @@ with tab_sim:
             duration = time.time() - start_t
 
             if final_epoch is None:
-                st.error("❌ No viable departure found. The flight might be too soon!")
+                st.error("❌ No viable departure found.")
                 st.stop()
-
             if not raw_report:
-                st.error("⚠️ Backend Failure: Check API Keys or Network.")
+                st.error("⚠️ Backend Failure.")
                 st.stop()
             
             final_dt = datetime.fromtimestamp(final_epoch)
             data = normalize_output(raw_report, final_dt, flight_dt)
 
-            database.log_trip(
+            # STORE RESULTS IN SESSION STATE (Persistence for Feedback)
+            st.session_state['current_result'] = data
+            st.session_state['current_duration'] = duration
+            st.session_state['final_dt'] = final_dt
+            st.session_state['dead_epoch'] = dead_epoch
+            st.session_state['flight_num_log'] = flight_num
+            st.session_state['origin_log'] = origin
+            
+            # LOG TRIP TO DB & SAVE RUN ID
+            run_id = database.log_trip(
                 flight_num=flight_num,
                 origin=origin,
                 dest=destination,
@@ -232,7 +250,16 @@ with tab_sim:
                 probability=data['raw_prob'],
                 risk_status=data['risk_label']
             )
+            st.session_state['current_run_id'] = run_id
 
+    # 2. DISPLAY RESULTS (From Session State)
+    if st.session_state.get('has_run'):
+        data = st.session_state['current_result']
+        final_dt = st.session_state['final_dt']
+        dead_epoch = st.session_state['dead_epoch']
+        duration = st.session_state['current_duration']
+
+        # RISK HEADER
         if data['is_late']:
             st.error(f"🚨 **HIGH RISK** — {data['late_minutes']}m late")
             with st.expander("💡 Rescue Plan", expanded=True):
@@ -246,23 +273,22 @@ with tab_sim:
 
         st.markdown("---")
         
+        # METRICS GRID
         c1, c2, c3, c4, c5 = st.columns(5)
-        
         c1.metric("Suggested Departure", final_dt.strftime("%I:%M %p"))
-        c2.metric("🛡️ Certainty Arrival", data['worst_case_arrival'].strftime("%I:%M %p"), help="95% Confidence you arrive by this time")
-        c3.metric("Gate Closes", data['gate_close_dt'].strftime("%I:%M %p"), help="Flights close 15m before departure")
+        c2.metric("🛡️ Certainty Arrival", data['worst_case_arrival'].strftime("%I:%M %p"))
+        c3.metric("Gate Closes", data['gate_close_dt'].strftime("%I:%M %p"))
         
         if dead_epoch:
-            dead_dt = datetime.fromtimestamp(dead_epoch)
-            c4.metric("💀 Drop Dead", dead_dt.strftime("%I:%M %p"), help="If you leave after this, you will almost certainly miss the flight.")
+            c4.metric("💀 Drop Dead", datetime.fromtimestamp(dead_epoch).strftime("%I:%M %p"))
         else:
             c4.metric("Drop Dead", "N/A")
-
+            
         c5.metric("Time to Kill", f"{data['time_to_kill']}m")
         st.caption(f"⚡ Monte Carlo Simulation processed in {duration:.2f} seconds.")
 
+        # VISUALIZATION
         col_chart, col_breakdown = st.columns([2, 1])
-        
         with col_chart:
             viz = Visualizer()
             fig = viz.plot_risk_profile(data['dist_data'], data['mins_available'], data['p95_eta'])
@@ -271,7 +297,6 @@ with tab_sim:
         with col_breakdown:
             st.subheader("⏱️ Time Breakdown")
             bd = data['breakdown']
-            
             st.info(f"**🚗 Drive:** ~{bd['drive']}m")
             
             tsa_color = "#ff4b4b" if bd['tsa'] > 30 else "#09ab3b"
@@ -288,9 +313,29 @@ with tab_sim:
             if data['weather_mult'] > 1.0:
                 st.warning(f"⛈️ Weather Penalty: {int((data['weather_mult']-1)*100)}% slower")
 
+        # 3. FEEDBACK LOOP
+        st.markdown("---")
+        st.write("### 🤖 Model Feedback")
+        st.write("Help us improve accuracy. Does this assessment feel correct?")
+        
+        if 'current_run_id' in st.session_state:
+            run_id = st.session_state['current_run_id']
+            col_good, col_bad = st.columns(2)
+            
+            with col_good:
+                if st.button("👍 Good Prediction", key="btn_good"):
+                    database.log_feedback(run_id, 1)
+                    st.toast("Feedback Saved: Positive", icon="✅")
+                    
+            with col_bad:
+                if st.button("👎 Inaccurate", key="btn_bad"):
+                    database.log_feedback(run_id, 0)
+                    st.toast("Feedback Saved: Negative", icon="📉")
+
     else:
         st.info("👈 Enter flight details in the sidebar and click 'Run Simulation'")
 
+# --- HISTORY TAB ---
 with tab_hist:
     st.header("📜 Recent Trip History")
     st.write("Review your previously logged simulations below.")
@@ -298,9 +343,10 @@ with tab_hist:
     history_rows = database.view_history(limit=20)
     
     if history_rows:
+        # Note: Added Feedback Column to View
         df = pd.DataFrame(history_rows, columns=[
             "ID", "Run Timestamp", "Flight #", "Origin", "Destination", 
-            "Weather Mult", "Rec Departure", "Probability", "Risk Status"
+            "Weather Mult", "Rec Departure", "Probability", "Risk Status", "User Feedback"
         ])
         
         st.dataframe(df.drop(columns=["ID"]), width='stretch', hide_index=True)

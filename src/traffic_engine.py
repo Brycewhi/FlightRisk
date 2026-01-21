@@ -1,9 +1,8 @@
 import aiohttp
 import asyncio
 import config
-import os  
 from typing import Optional, Dict, Union, Any
-from mocks import get_mock_traffic # Mock Data Import
+import mocks 
 
 class TrafficEngine:
     """
@@ -11,9 +10,7 @@ class TrafficEngine:
     Interfaces with Google Maps Directions API via AsyncIO to provide 
     duration variance required for stochastic risk modeling.
     """
-    api_key: str
-    base_url: str
-
+    
     def __init__(self) -> None:
         self.api_key = config.GOOGLE_API_KEY
         self.base_url = "https://maps.googleapis.com/maps/api/directions/json"
@@ -29,12 +26,11 @@ class TrafficEngine:
         """
         Internal Helper: Asynchronously retrieves a single trip duration estimate.
         """
-        # Google API requires integer for timestamps.
-        if isinstance(departure_time, (float)):
+        # Google API requires integer for timestamps
+        if isinstance(departure_time, float):
             departure_time = int(departure_time)
             
-        # Parameter configuration for predictive traffic analytics.
-        params: Dict[str, Union[str, int]] = {
+        params = {
             "origin": origin,
             "destination": destination,
             "departure_time": departure_time, 
@@ -45,37 +41,38 @@ class TrafficEngine:
 
         try:
             async with session.get(self.base_url, params=params) as response:
-                # Handle non-200 HTTP statuses.
                 if response.status != 200:
-                    print(f"API Error ({model}): Status {response.status}")
+                    print(f"TRAFFIC API Error ({model}): Status {response.status}")
                     return None
                     
                 data = await response.json()
 
-                # Handle non-OK API statuses (e.g., zero results, quota exceeded).
-                if data['status'] != 'OK':
-                    print(f"API Status Error ({model}): {data['status']}")
-                    if 'error_message' in data:
-                        print(f"Reason: {data['error_message']}")
+                if data.get('status') != 'OK':
+                    # Common error: 'ZERO_RESULTS' or 'OVER_QUERY_LIMIT'
+                    print(f"TRAFFIC API Status Error ({model}): {data.get('status')}")
                     return None
                 
-                # Extract specific route data.
-                # Navigate hierarchy: A single-leg trip corresponds to the primary route.
+                # Robust extraction: Ensure routes exist before indexing
+                if not data.get('routes'):
+                    return None
+
                 route = data['routes'][0]
                 leg = route['legs'][0]
+                
+                # 'duration_in_traffic' is only present if traffic data is available
+                # Fallback to standard 'duration' if missing
+                duration_node = leg.get('duration_in_traffic', leg.get('duration'))
 
                 return {
                     "model_used": model,
-                    # Use .get() as fallback: Use baseline duration if traffic-adjusted value is null.
-                    "seconds": leg.get('duration_in_traffic', leg['duration'])['value'],
-                    "human_readable": leg.get('duration_in_traffic', leg['duration'])['text'],
+                    "seconds": duration_node['value'],
+                    "human_readable": duration_node['text'],
                     "distance_meters": leg['distance']['value'],
-                    "polyline": route['overview_polyline']['points'] # Captured for weather sampling.
+                    "polyline": route['overview_polyline']['points'] 
                 }
                 
         except Exception as e:
-            # Catch network/connection level failures to prevent engine crashes.
-            print(f"Traffic System Error ({model}): {e}")
+            print(f"TRAFFIC System Error ({model}): {e}")
             return None
 
     async def get_traffic_metrics(
@@ -86,56 +83,52 @@ class TrafficEngine:
     ) -> Dict[str, Any]:
         """
         Orchestrates parallel requests to build the Triangular Distribution.
-        
-        Returns:
-            Dict containing:
-            - 'min' (optimistic minutes)
-            - 'mode' (best_guess minutes)
-            - 'max' (pessimistic minutes)
-            - 'polyline' (from best_guess route)
+        Returns: 'min', 'mode', 'max' (in minutes) and 'polyline'.
         """
-        
-        
-        #  SAFETY LOCK for preserving API calls.
-        # If 'USE_MOCK_DATA' is True, we skip Google entirely.
-        if os.getenv("USE_MOCK_DATA") == "True":
-            return get_mock_traffic()
+        # SAFETY LOCK: Uses the centralized config flag to prevent real API calls.
+        if config.USE_MOCK_DATA:
+            return mocks.get_mock_traffic()
+
+        if not self.api_key:
+            print("No Traffic API Key found. Using Mock.")
+            return mocks.get_mock_traffic()
 
         async with aiohttp.ClientSession() as session:
-            # 1. Define the 3 tasks.
+            # 1. Define the 3 concurrent tasks
             task_opt = self._fetch_single_route(session, origin, destination, "optimistic", departure_time)
             task_best = self._fetch_single_route(session, origin, destination, "best_guess", departure_time)
             task_pess = self._fetch_single_route(session, origin, destination, "pessimistic", departure_time)
             
-            # 2. Await them all simultaneously.
-            # The total wait time is now equal to the SLOWEST request, not the sum of all 3.
+            # 2. Fire them all at once (AsyncIO Scatter/Gather pattern)
             results = await asyncio.gather(task_opt, task_best, task_pess)
             
-            # 3. Parse and Clean Data for the Stochastic Model.
             clean_data = {}
             
             for res in results:
                 if res:
-                    # Store polyline from the "best_guess" route as the canonical path.
+                    mins = round(res["seconds"] / 60.0, 2)
+                    
                     if res["model_used"] == "best_guess":
                         clean_data["polyline"] = res["polyline"]
-                        clean_data["mode"] = round(res["seconds"] / 60, 2)
+                        clean_data["mode"] = mins
                     elif res["model_used"] == "optimistic":
-                        clean_data["min"] = round(res["seconds"] / 60, 2)
+                        clean_data["min"] = mins
                     elif res["model_used"] == "pessimistic":
-                        clean_data["max"] = round(res["seconds"] / 60, 2)
+                        clean_data["max"] = mins
 
-            # Sanity Check: Ensure we have all 3 points for the Triangle.
-            if len(clean_data) < 3:
-                print("Warning: Partial traffic data received. Distribution may be incomplete.")
+            # Fail-safe: If API partial failed, fill gaps with the mode
+            if "mode" in clean_data:
+                if "min" not in clean_data: clean_data["min"] = clean_data["mode"] * 0.9
+                if "max" not in clean_data: clean_data["max"] = clean_data["mode"] * 1.2
+            
+            # If completely failed, return Mock
+            if not clean_data:
+                return mocks.get_mock_traffic()
                 
             return clean_data
-
-# Local Unit Test Block.
+# --- UNIT TEST BLOCK ---
 if __name__ == "__main__":
     import time
-    
-    # Async wrapper for local testing.
     async def test_run():
         engine = TrafficEngine()
         home = "Stony Brook University, NY"
@@ -144,11 +137,9 @@ if __name__ == "__main__":
         print(f"Fetching PARALLEL traffic models for: {home} -> {jfk}")
         start = time.time()
         
-        # This will return Mock Data if env var is set
         data = await engine.get_traffic_metrics(home, jfk)
         
         duration = time.time() - start
-        
         print(f"\n✅ Completed in {duration:.2f} seconds")
         print(f"Optimistic (Min): {data.get('min')} mins")
         print(f"Best Guess (Mode): {data.get('mode')} mins")

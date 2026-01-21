@@ -101,16 +101,6 @@ This project is containerized for consistent deployment across environments:
 
 ---
 
-## 📈 Machine Learning Roadmap (v5.0)
-
-While the current engine uses high-fidelity stochastic modeling, the next phase involves replacing static multipliers with **Learned Feature Sets**:
-
-* **Traffic Bias Correction:** Implement a **Random Forest Regressor** to identify systematic bias in "Pessimistic" traffic estimates (e.g., quantifying how much Google under-predicts Friday rush hour in NYC).
-* **Dynamic Weather Weighting:** Replace static condition penalties with a model trained on historical precipitation data (mm/hr) to predict the exact roadway speed reduction.
-* **Stochastic Tuning:** Use **Bayesian Optimization** to dynamically adjust the Shape ($\alpha$) and Scale ($\beta$) parameters of the AirportEngine’s Gamma distributions based on real-time "Late Arrival" feedback loops.
-
----
-
 ## 🚦 Installation
 
 1.  **Clone:**

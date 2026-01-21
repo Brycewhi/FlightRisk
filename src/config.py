@@ -7,14 +7,24 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Load environment variables from the .env file in the root directory.
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
-# Keep API keys centralized for easier maintnence.
+# --- API KEYS ---
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 RAPID_API_KEY = os.getenv("RAPID_API_KEY")
 
-# Define the database path centrally so all modules use the same file.
+# --- DATABASE CONFIG ---
+# Auto-detects if running on Railway (Postgres) or Local (SQLite).
+DATABASE_URL = os.getenv("DATABASE_URL")
 DB_PATH = os.path.join(BASE_DIR, 'flight_data.db')
 
-# Check that the keys exist before execution.
-if not GOOGLE_API_KEY or not OPENWEATHER_API_KEY or not RAPID_API_KEY:
-    print("Configuration Error: One or more API keys are missing in the .env file.")
+# --- SAFETY & SIMULATION FLAGS ---
+# Centralized control for Cost vs. Realism.
+# True = Use simulated data (Cost $0). False = Call real APIs (Cost $$).
+USE_MOCK_DATA = os.getenv("USE_MOCK_DATA", "True").lower() == "true"
+
+# The "Nuclear Option": Must be explicitly set to True to spend real money.
+USE_REAL_DATA_DANGEROUS = os.getenv("USE_REAL_DATA_DANGEROUS", "False").lower() == "true"
+
+# --- VALIDATION ---
+if not all([GOOGLE_API_KEY, OPENWEATHER_API_KEY, RAPID_API_KEY]):
+    print("WARNING : One or more API keys are missing. App may fail in Real Mode.")
