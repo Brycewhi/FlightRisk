@@ -9,7 +9,7 @@
 [![pybind11](https://img.shields.io/badge/Integration-pybind11-yellow.svg)](https://github.com/pybind/pybind11)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-**[🔗 Live Demo](#deployment)** | **[📊 Architecture](#architecture)** | **[🚀 Quick Start](#installation)**
+**[🔗 Live Demo](#deployment)** 
 
 ---
 
@@ -446,7 +446,7 @@ MIT License — See [LICENSE](LICENSE) for details.
 **Bryce Whiteside**  
 Applied Mathematics & Computer Science | Stony Brook University
 
-[GitHub](https://github.com/Brycewhi) | [Portfolio](https://brycewhi.dev)
+[GitHub](https://github.com/Brycewhi) 
 
 ---
 
@@ -455,6 +455,7 @@ Applied Mathematics & Computer Science | Stony Brook University
 - **Google Maps Directions API** — Traffic data + polyline encoding
 - **OpenWeather One Call 3.0** — Weather sampling
 - **AeroDataBox** — Flight status validation
+- **TSA Wait Time API** - Historical TSA wait time data
 - **pybind11** — Seamless Python/C++ integration
 - **Streamlit** — Interactive dashboard framework
 
