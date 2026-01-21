@@ -9,7 +9,7 @@
 [![pybind11](https://img.shields.io/badge/Integration-pybind11-yellow.svg)](https://github.com/pybind/pybind11)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-**[🔗 Live Demo](#deployment)** 
+**[🔗 Live Demo] https://flightrisk-production.up.railway.app/** 
 
 ---
 
