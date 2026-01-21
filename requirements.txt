@@ -1,13 +1,30 @@
-requests
-polyline
-python-dotenv
-numpy
-pandas
-matplotlib
-seaborn
-scipy
-streamlit
+# Core Dependencies
+requests>=2.31.0
+polyline>=2.0.0
+python-dotenv>=1.0.0
+
+# Data Science & Analysis
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Async HTTP Client
+aiohttp>=3.13.0
+
+# Web Framework
+streamlit>=1.28.0
+
+# PyDeck for Maps
+pydeck>=0.8.0
+
+# C++ Integration (Python Bindings)
 pybind11>=2.10.0
-aiohttp==3.13.3
-psycopg2-binary
-cmake==3.27.0
+
+# Database Drivers (PostgreSQL for Cloud, SQLite for local)
+psycopg2-binary>=2.9.0 ; platform_system != "Windows"
+pyodbc>=4.0.0 ; platform_system == "Windows"
+

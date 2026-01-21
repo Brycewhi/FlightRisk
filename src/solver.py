@@ -4,10 +4,10 @@ import aiohttp
 from datetime import datetime
 from typing import Optional, Tuple, Dict, Any
 
-from traffic_engine import TrafficEngine
-from weather_engine import WeatherEngine
+from engines.traffic_engine import TrafficEngine
+from engines.weather_engine import WeatherEngine
 from risk_engine import RiskEngine
-from airport_engine import AirportEngine
+from engines.airport_engine import AirportEngine
 
 class Solver:
     """
@@ -44,7 +44,6 @@ class Solver:
             return None
 
         # STEP 2: ASYNC WEATHER & AIRPORT (Parallel)
-        # We fetch weather for the route AND airport wait times simultaneously
         route_polyline = traffic_metrics['polyline']
         
         weather_task = self.weather.get_route_weather(route_polyline, session)
@@ -53,18 +52,16 @@ class Solver:
         drive_time_sec = traffic_metrics['mode'] * 60
         est_arrival = departure_time + drive_time_sec
         
-        # Determine Airport Code from Destination String
+        # Determine Airport Code
         target_airport = "JFK" 
         if "LGA" in destination.upper(): target_airport = "LGA"
         elif "EWR" in destination.upper(): target_airport = "EWR"
         elif "LHR" in destination.upper(): target_airport = "LHR"
 
-        # Call the Hybrid Airport Engine (API + Math)
         airport_task = self.airport.get_total_airport_time(
             session, target_airport, est_arrival, has_bags, is_precheck
         )
 
-        # Wait for both
         weather_report, (total_airport_delays, airport_stats) = await asyncio.gather(weather_task, airport_task)
         
         if weather_report is None:
@@ -78,13 +75,19 @@ class Solver:
         }
 
         # STEP 4: FINAL EVALUATION 
-        return self.risk.evaluate_trip(
+        analysis_result = self.risk.evaluate_trip(
             traffic_results=formatted_traffic, 
             weather_report=weather_report, 
             airport_delays=total_airport_delays, 
             airport_stats=airport_stats, 
             buffer_mins=buffer_mins
         )
+
+        # --- FIX: INJECT POLYLINE DATA FOR MAP UI ---
+        if analysis_result:
+            analysis_result['route_polyline'] = route_polyline
+            
+        return analysis_result
 
     async def find_optimal_departure(
         self,
@@ -124,7 +127,7 @@ class Solver:
                 memo[i] = prob
                 return prob
 
-            # Binary Search 1: Optimal Time (e.g. 90% success)
+            # Binary Search 1: Optimal Time
             optimal_idx = None
             low, high = 0, max_slots
 
@@ -138,7 +141,7 @@ class Solver:
                 else:
                     low = mid + 1       
 
-            # Binary Search 2: Drop Dead Time (e.g. 10% success)
+            # Binary Search 2: Drop Dead Time
             drop_dead_idx = None
             search_limit = optimal_idx if optimal_idx is not None else max_slots
             low, high = 0, search_limit
@@ -157,27 +160,3 @@ class Solver:
         dead_time = (start_scan - (drop_dead_idx * step_seconds)) if drop_dead_idx is not None else None
         
         return opt_time, dead_time
-
-# Local Unit Test Block
-if __name__ == "__main__":
-    print("Testing Async Solver Orchestration...")
-    
-    async def test_run():
-        solver = Solver()
-        test_flight_time = int(time.time()) + (5 * 3600)
-        
-        start = time.time()
-        best_time, dead_time = await solver.find_optimal_departure(
-            "Stony Brook University, NY", "JFK Airport, NY", test_flight_time, True, False, 
-            buffer_minutes=30  
-        )
-        duration = time.time() - start
-
-        if best_time:
-            print(f"✅ Safe Departure: {datetime.fromtimestamp(best_time).strftime('%I:%M %p')}")
-        if dead_time:
-            print(f"💀 Drop Dead: {datetime.fromtimestamp(dead_time).strftime('%I:%M %p')}")
-        
-        print(f"Calculation Time: {duration:.2f} seconds")
-
-    asyncio.run(test_run())

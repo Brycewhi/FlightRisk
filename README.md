@@ -57,35 +57,35 @@ The system aggregates 100,000 samples from the engines to generate a **Probabili
 
 ```text
 FlightRisk/
-├── assets/                 # UI Screenshots and static images
-├── build/                  # C++ Build artifacts (Generated)
+├── assets/                 # UI Screenshots, diagrams, and static images
+├── build/                  # C++ Build artifacts and compiled binaries
 ├── cpp_core/               # C++ Source Code
-│   └── simulation.cpp      # The Monte Carlo Engine core logic
+│   └── simulation.cpp      # The Monte Carlo Engine core logic (100k iterations)
 ├── src/                    # Python Application Logic
-│   ├── airport_engine.py   # TSA Queue Theory & Gamma Distribution logic
-│   ├── app.py              # Async Streamlit Entry Point (Frontend)
-│   ├── async_benchmark.py  # Performance testing & latency analysis
+│   ├── engines/            # Modular Data Fetchers (API Wrappers)
+│   │   ├── airport_engine.py   # TSA Queue Theory & Gamma Distribution logic
+│   │   ├── flight_engine.py    # Async AeroDataBox API Integration & Caching
+│   │   ├── traffic_engine.py   # Async Google Maps Integration & Polyline extraction
+│   │   └── weather_engine.py   # Async OpenWeather One Call 3.0 Integration
+│   ├── app.py              # Main Entry Point: Streamlit UI & State Management
 │   ├── config.py           # Centralized API & Environment configuration
-│   ├── database.py         # SQLite Persistence Layer & History logic
-│   ├── flight_engine.py    # Async AeroDataBox API Integration
+│   ├── database.py         # PostgreSQL Persistence & Feedback logging
 │   ├── main.py             # Application logic orchestrator
-│   ├── risk_engine.py      # Hybrid Engine (Python + C++ Bindings)
-│   ├── solver.py           # Async Orchestrator & Binary Search
-│   ├── traffic_engine.py   # Async Google Maps Integration
-│   ├── visualizer.py       # Seaborn/Matplotlib KDE plotting logic
-│   └── weather_engine.py   # Async OpenWeather One Call 3.0 Integration
+│   ├── risk_engine.py      # Hybrid Engine Wrapper (Python + C++ Bindings)
+│   ├── solver.py           # The "Brain": Async Orchestrator & Binary Search
+│   └── visualizer.py       # KDE and Plotting logic (Seaborn/Matplotlib)
+├── tests/                  # Testing & Simulation Utilities
+│   ├── async_benchmark.py  # Latency and performance testing
+│   ├── mocks.py            # Mock API responses for offline testing
+│   └── test_cpp.py         # C++ Extension verification scripts
 ├── .dockerignore           # Docker build exclusions
 ├── .env                    # Local environment variables (Hidden)
 ├── .gitignore              # Git version control exclusions
-├── Dockerfile              # Containerization instructions
-├── flight_data.db          # Cached flight status & quota protection DB
-├── flightrisk.db           # Main simulation & risk history DB
+├── Dockerfile              # Multi-stage build (C++ Comp + Python Runtime)
 ├── LICENSE                 # Project MIT License
 ├── README.md               # Project documentation
 ├── requirements.txt        # Python Dependencies
-├── setup.py                # C++ Compilation & pybind11 script
-└── test_cpp.py             # Unit tests for C++ extension verification
-```
+└── setup.py                # C++ Compilation & pybind11 script
 
 ---
 

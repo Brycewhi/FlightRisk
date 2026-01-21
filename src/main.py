@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any
 import database
 from solver import Solver 
 from visualizer import Visualizer
-from flight_engine import FlightEngine
+from engines.flight_engine import FlightEngine
 
 # ANSI Color Codes
 RESET = "\033[0m"

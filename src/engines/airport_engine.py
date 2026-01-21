@@ -4,7 +4,16 @@ from typing import List, Tuple, Union, Optional, Dict, Any
 import config
 import aiohttp
 import asyncio
-import mocks
+import logging
+import sys
+import os
+
+# Add parent directory to path to import mocks
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+from tests import mocks
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # HIGH-PERFORMANCE IMPORT
 try:
@@ -13,7 +22,7 @@ try:
 except ImportError:
     from scipy.stats import gamma 
     USE_CPP = False
-    print("WARNING: C++ Module not found. Running in slower mode.")
+    logger.warning("C++ Module not found. Running in slower mode.")
 
 class AirportEngine:
     """
@@ -50,7 +59,7 @@ class AirportEngine:
             return None
 
         # Clean IATA code (e.g. "JFK International" -> "JFK")
-        code = airport_code.split()[0].strip().upper()[:3]
+        code = self._extract_iata_code(airport_code)
         url = f"{self.base_url}{code}"
         
         headers = {
@@ -71,24 +80,46 @@ class AirportEngine:
                         return float(data[0].get('wait_minutes', 20.0))
                         
                 return None
-        except Exception:
+        except asyncio.TimeoutError:
+            logger.warning(f"TSA API timeout for {code}")
             return None
+        except Exception as e:
+            logger.error(f"TSA API fetch failed for {code}: {e}", extra={"airport": code})
+            return None
+
+    def _extract_iata_code(self, airport_code: str) -> str:
+        """
+        Safely extracts IATA code from various formats.
+        Examples: "JFK" -> "JFK", "JFK International" -> "JFK", "J FK" -> "JFK"
+        """
+        code = airport_code.split()[0].strip().upper()[:3]
+        return code
 
     def _get_tier(self, airport_code: str) -> int:
         """Classifies airport complexity based on IATA code."""
-        code = airport_code.upper()
-        if any(t in code for t in self.tier_1): return 1
-        elif any(t in code for t in self.tier_2): return 2
-        else: return 3 
+        code = self._extract_iata_code(airport_code)
+        if code in self.tier_1:
+            return 1
+        elif code in self.tier_2:
+            return 2
+        else:
+            return 3 
 
-    def _get_base_params(self, airport_code: str, real_mean: Optional[float] = None) -> Tuple[float, float]:
+    def _get_base_params(self, airport_code: str, tsa_live_wait_mins: Optional[float] = None) -> Tuple[float, float]:
         """
         Returns statistical moments (Average, Scale) for the Gamma distribution.
-        CRITICAL: If 'real_mean' is provided, it OVERRIDES the tier-based average.
+        CRITICAL: If 'tsa_live_wait_mins' is provided, it OVERRIDES the tier-based average.
+        
+        Args:
+            airport_code: IATA airport code
+            tsa_live_wait_mins: Real-time TSA data (if available)
+        
+        Returns:
+            Tuple of (mean, scale) for Gamma distribution
         """
         # 1. Determine the Mean (Average Wait)
-        if real_mean is not None:
-            avg = real_mean
+        if tsa_live_wait_mins is not None:
+            avg = tsa_live_wait_mins
             # If we have real data, variance is usually proportional to the mean
             scale = avg * 0.25 
         else:
@@ -106,9 +137,12 @@ class AirportEngine:
     def _get_time_multiplier(self, dt_object: datetime) -> float:
         """Calculates congestion factor based on hour of day (Rush Hour logic)."""
         hour = dt_object.hour
-        if 5 <= hour < 9: return 1.3
-        elif 15 <= hour < 19: return 1.2
-        elif (10 <= hour < 14) or (hour >= 21): return 0.7   
+        if 5 <= hour < 9:
+            return 1.3
+        elif 15 <= hour < 19:
+            return 1.2
+        elif (10 <= hour < 14) or (hour >= 21):
+            return 0.7   
         return 1.0
 
     def _get_day_multiplier(self, dt_object: datetime) -> float:
@@ -117,9 +151,12 @@ class AirportEngine:
         month = dt_object.month
         multiplier = 1.0
         
-        if day == 4 or day == 6: multiplier *= 1.15 
-        if day == 1 or day == 2: multiplier *= 0.85
-        if month in [6,7,8,11,12]: multiplier *= 1.1
+        if day == 4 or day == 6:  # Friday, Sunday
+            multiplier *= 1.15 
+        if day == 1 or day == 2:  # Monday, Tuesday
+            multiplier *= 0.85
+        if month in [6, 7, 8, 11, 12]:  # Summer, Fall holidays
+            multiplier *= 1.1
             
         return multiplier
 
@@ -136,9 +173,12 @@ class AirportEngine:
             
         tier = self._get_tier(airport_code)
         
-        if tier == 1: avg, scale = 13.0, 4.0
-        elif tier == 2: avg, scale = 9.0, 2.0
-        else: avg, scale = 3.0, 1.0
+        if tier == 1:
+            avg, scale = 13.0, 4.0
+        elif tier == 2:
+            avg, scale = 9.0, 2.0
+        else:
+            avg, scale = 3.0, 1.0
 
         if epoch_time:
             dt = datetime.fromtimestamp(epoch_time)
@@ -159,19 +199,31 @@ class AirportEngine:
         epoch_time: Union[int, float], 
         is_precheck: bool = False, 
         iterations: int = 1000,
-        real_mean: Optional[float] = None 
+        tsa_live_wait_mins: Optional[float] = None 
     ) -> np.ndarray:
-        """Core simulation for TSA security checkpoints."""
+        """
+        Core simulation for TSA security checkpoints.
+        
+        Args:
+            airport_code: IATA airport code
+            epoch_time: Departure time as Unix timestamp
+            is_precheck: Whether passenger has TSA PreCheck
+            iterations: Number of Monte Carlo samples
+            tsa_live_wait_mins: Real-time TSA data (if available)
+        
+        Returns:
+            NumPy array of simulated wait times (minutes)
+        """
         dt = datetime.fromtimestamp(epoch_time)
         
         # HYBRID LOGIC: Use real mean if available, else heuristic
-        avg, scale = self._get_base_params(airport_code, real_mean)
+        avg, scale = self._get_base_params(airport_code, tsa_live_wait_mins)
         
-        # Only apply multipliers if we are using heuristics (Real data already includes congestion)
-        if real_mean is None:
-            total_mult = self._get_time_multiplier(dt) * self._get_day_multiplier(dt)
-            avg *= total_mult
-            scale *= total_mult 
+        # Apply time-of-day and day-of-week multipliers
+        # These apply whether using real data or heuristics
+        total_mult = self._get_time_multiplier(dt) * self._get_day_multiplier(dt)
+        avg *= total_mult
+        scale *= total_mult
 
         if is_precheck:
             avg *= 0.35
@@ -187,9 +239,12 @@ class AirportEngine:
     def simulate_walk(self, airport_code: str, iterations: int = 1000) -> np.ndarray:
         """Simulates terminal transit time (Normal Distribution)."""
         tier = self._get_tier(airport_code)
-        if tier == 1: return np.random.normal(12, 5, iterations)
-        elif tier == 2: return np.random.normal(7, 2, iterations)
-        else: return np.random.normal(3, 1, iterations)
+        if tier == 1:
+            return np.random.normal(12, 5, iterations)
+        elif tier == 2:
+            return np.random.normal(7, 2, iterations)
+        else:
+            return np.random.normal(3, 1, iterations)
 
     async def get_total_airport_time(
         self, 
@@ -200,7 +255,12 @@ class AirportEngine:
         is_precheck: bool, 
         iterations: int = 1000
     ) -> Tuple[np.ndarray, Dict[str, Any]]: 
-        """Aggregates all airport processes."""
+        """
+        Aggregates all airport processes (check-in, security, walk).
+        
+        Returns:
+            Tuple of (total_time_distribution, metadata_dict)
+        """
         
         # 1. Try to fetch Live Data
         real_wait = await self._fetch_live_wait_time(session, airport_code)
@@ -209,7 +269,7 @@ class AirportEngine:
         checkin = self.simulate_checkin(airport_code, has_bags, epoch_time, iterations)
         
         # Pass the real_wait to security logic
-        security = self.simulate_security(airport_code, epoch_time, is_precheck, iterations, real_mean=real_wait)
+        security = self.simulate_security(airport_code, epoch_time, is_precheck, iterations, tsa_live_wait_mins=real_wait)
         
         walk = self.simulate_walk(airport_code, iterations)
         
@@ -225,14 +285,14 @@ class AirportEngine:
 # --- UNIT TEST BLOCK ---
 if __name__ == "__main__":
     async def test_run():
-        print("Testing Airport Engine...")
+        logger.info("Testing Airport Engine...")
         engine = AirportEngine()
         async with aiohttp.ClientSession() as session:
             # Simulate a JFK trip with bags
             dists, stats = await engine.get_total_airport_time(
                 session, "JFK", int(datetime.now().timestamp()), True, False
             )
-            print(f"JFK Stats (Has Bags, No Precheck): {stats}")
-            print(f"Used Live Data? {stats['used_live_data']}")
+            logger.info(f"JFK Stats (Has Bags, No Precheck): {stats}")
+            logger.info(f"Used Live Data? {stats['used_live_data']}")
     
     asyncio.run(test_run())
