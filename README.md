@@ -26,7 +26,7 @@ Standard navigation apps give you an *average* ETA. But if your flight closes it
 FlightRisk predicts **your probability of catching a flight** by:
 
 1. **Pulling real-time traffic data** (Google Maps, 3 concurrent models)
-2. **Sampling weather along your route** (OpenWeather, 3 corridor points)
+2. **Sampling weather along your route** (OpenWeather, 3 corridor points with Normal Distribution modeling)
 3. **Modeling TSA queue dynamics** (Real-time wait times + Queue Theory)
 4. **Running 100,000 Monte Carlo scenarios** in compiled C++
 5. **Returning actionable recommendations** in under 100ms
@@ -66,30 +66,35 @@ The system fuses **Queue Theory, Stochastic Modeling, and Async Concurrency** in
 ┌─────────────────────────────────────────────────────────┐
 │              STREAMLIT FRONTEND (App.py)                │
 │  (Non-blocking async wrapper + interactive dashboard)  │
-└─────────────────────────────────────────────────────────┘
-                           │
-        ┌──────────────────┴──────────────────┐
-        │                                     │
-┌───────▼────────────┐          ┌────────────▼─────────┐
-│   SOLVER LAYER     │          │   RISK ENGINE        │
-│  (Orchestrator)    │          │  (Aggregator)        │
-└───────┬────────────┘          └────────────┬─────────┘
-        │                                     │
-    ┌───┴────┬────────────┬────────────┐     │
-    │        │            │            │     │
-    ▼        ▼            ▼            ▼     │
-┌────────┬────────┬──────────┬───────────┐   │
-│Traffic │Weather │  Flight  │  Airport  │   │
-│Engine  │Engine  │  Engine  │  Engine   │   │
-├────────┴────────┴──────────┴───────────┤   │
-│    ASYNC DATA FETCHERS (aiohttp)       │   │
-│  - Google Directions API (3 models)    │   │
-│  - OpenWeather One Call 3.0            │   │
-│  - AeroDataBox Flight API              │   │
-│  - TSA Wait Times API                  │   │
-└────────────────────────────────────────┘   │
-                                             │
-                    ┌────────────────────────┘
+└──────────┬──────────────────────────────────┬───────────┘
+           │                                  │
+           │                          ┌───────▼────────┐
+           │                          │ Flight Engine  │
+           │                          │ (Validation)   │
+           │                          └────────────────┘
+           │
+        ┌──┴──────────────────────────┐
+        │                             │
+┌───────▼────────────┐   ┌────────────▼─────────┐
+│   SOLVER LAYER     │   │   RISK ENGINE        │
+│  (Orchestrator)    │   │  (Aggregator)        │
+└───────┬────────────┘   └────────────┬─────────┘
+        │                             │
+    ┌───┴────┬────────────┐           │
+    │        │            │           │
+    ▼        ▼            ▼           │
+┌────────┬────────┬───────────┐       │
+│Traffic │Weather │  Airport  │       │
+│Engine  │Engine  │  Engine   │       │
+├────────┴────────┴───────────┤       │
+│ ASYNC DATA FETCHERS (aiohttp)       │
+│  - Google Directions API (3 models) │
+│  - OpenWeather One Call 3.0         │
+│  - AeroDataBox Flight API           │
+│  - TSA Wait Times API               │
+└─────────────────────────────────────┘
+                                      │
+                    ┌─────────────────┘
                     │
                     ▼
             ┌──────────────────┐
@@ -99,6 +104,16 @@ The system fuses **Queue Theory, Stochastic Modeling, and Async Concurrency** in
             │ - Normal RNG     │
             │ - 100k scenarios │
             └──────────────────┘
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │   DATABASE LAYER      │
+        │  (database.py)        │
+        │ - SQLite (local)      │
+        │ - PostgreSQL (prod)   │
+        │ - Trip history        │
+        │ - User feedback       │
+        └───────────────────────┘
 ```
 
 ### The Four Engines
@@ -108,10 +123,15 @@ The system fuses **Queue Theory, Stochastic Modeling, and Async Concurrency** in
 - Builds a **Triangular Distribution** from min/mode/max estimates
 - Extracts polyline for weather corridor sampling
 
-#### 2. **WeatherEngine** (Spatial Sampling + Memoization)
-- Decodes polyline and samples weather at **Start, Midpoint, Destination**
-- Applies **volatility multipliers** (Clear = 1.0x, Thunderstorm = 1.35x)
+#### 2. **WeatherEngine** (Spatial Sampling + Normal Distribution)
+- Decodes polyline and samples weather at **Start, Midpoint, Destination** in parallel
+- Models weather uncertainty as a **Normal (Gaussian) Distribution**:
+  - Base distribution: `N(mean_condition, volatility²)`
+  - Clear weather: volatility = 0.01 (low uncertainty)
+  - Rain/Storms: volatility = 0.10-0.20 (high uncertainty)
+- Applies **impact multipliers** (Clear = 1.0x, Thunderstorm = 1.35x)
 - **In-memory caching** to avoid redundant API calls
+- Weighted sampling: destination weather = 65% impact, start = 15%
 
 #### 3. **FlightEngine** (Flight Validation)
 - Fetches real-time flight status via AeroDataBox
@@ -160,7 +180,7 @@ The C++ kernel runs **100,000 scenarios** in **~50ms** (vs. 3+ seconds in pure P
 | **Async Concurrency** | 20+ parallel API calls, <100ms response time |
 | **C++ Performance Kernel** | 60x speedup over pure Python (50ms vs. 3s) |
 | **Queue Theory** | TSA lines modeled as Gamma distributions (mathematically sound) |
-| **Trip History & Feedback** | SQLite persistence for model calibration |
+| **Trip History & Feedback** | PostgreSQL (production) or SQLite (local) persistence for model calibration |
 | **Interactive Dashboard** | Streamlit UI with risk visualizations & route maps |
 | **Offline Testing** | Mock mode for development without API costs |
 | **Production Ready** | Error handling, logging, Docker deployment |
@@ -236,10 +256,11 @@ python src/main.py
    - Best Guess: 45 minutes
    - Pessimistic: 65 minutes
 
-2. **WeatherEngine** samples along the route:
-   - Start: Clear
-   - Midpoint: Cloudy
-   - Destination: Rain → **1.2x multiplier applied**
+2. **WeatherEngine** samples along the route using Normal Distribution:
+   - Start: Clear (volatility = 0.01)
+   - Midpoint: Cloudy (volatility = 0.02)
+   - Destination: Rain (volatility = 0.10) → **1.2x multiplier applied**
+   - Total weather impact: `0.15 * 1.0 + 0.25 * 1.0 + 0.65 * 1.2 = 1.17x`
 
 3. **AirportEngine** estimates:
    - Check-in: 10 minutes (with bags)
@@ -277,6 +298,17 @@ Segment Breakdown:
 - Google Maps returns three scenarios: optimistic, best_guess, pessimistic
 - Approximated as a Triangular distribution: optimal fit for bounded forecasts
 - Volatility adjusted by weather condition (rain = +10%, snow = +20%)
+
+**Weather Impact → Normal Distribution + Multiplicative Model**
+- Weather conditions modeled as **Normal (Gaussian) Distribution** with condition-specific volatility:
+  - Clear: `N(1.0, 0.01²)` — minimal variance
+  - Clouds: `N(1.0, 0.02²)` — slight variance
+  - Rain: `N(1.0, 0.10²)` — significant variance
+  - Thunderstorm: `N(1.0, 0.15²)` — high variance
+  - Snow: `N(1.0, 0.20²)` — maximum variance
+- Multiplier applied as variance expander: `traffic_std *= sqrt(1 + weather_volatility²)`
+- Weighted by location along route (destination = 65%, midpoint = 25%, start = 15%)
+- Models the bell-curve uncertainty in weather conditions rather than discrete values
 
 **TSA Wait Times → Gamma Distribution**
 - Service queues (TSA lines) are mathematically modeled as Gamma distributions
@@ -329,10 +361,10 @@ FlightRisk/
 │   │   ├── airport_engine.py  # Queue Theory + Gamma RNG
 │   │   ├── flight_engine.py   # Flight validation + ISO parsing
 │   │   ├── traffic_engine.py  # Triangular distribution builder
-│   │   └── weather_engine.py  # Spatial sampling + caching
+│   │   └── weather_engine.py  # Weather sampling + Normal Distribution
 │   ├── app.py                 # Streamlit dashboard
 │   ├── config.py              # Environment & API configuration
-│   ├── database.py            # SQLite persistence
+│   ├── database.py            # SQLite/PostgreSQL persistence
 │   ├── main.py                # CLI entry point
 │   ├── risk_engine.py         # Aggregator + Python/C++ bridge
 │   ├── solver.py              # Orchestrator + binary search
@@ -355,25 +387,81 @@ FlightRisk/
 
 ## 🐳 Deployment
 
-### Local Docker
+### Local Development
 
 ```bash
+# Using SQLite (local)
 docker build -t flightrisk .
 docker run -p 8501:8501 --env-file .env flightrisk
 ```
 
-### Cloud (Railway / Render)
+### Production Deployment (Railway)
 
-The included `Dockerfile` handles:
-1. C++ compilation stage (`pybind11` build)
-2. Python runtime stage (lean & optimized)
-3. Streamlit server boot
+FlightRisk is **fully configured for Railway deployment** with automatic PostgreSQL integration.
 
-**Key Environment Variables:**
-- `TZ=America/New_York` — Ensures timezone consistency across stochastic engines
-- `GOOGLE_API_KEY`, `OPENWEATHER_API_KEY`, `RAPID_API_KEY` — API credentials
-- `USE_MOCK_DATA=false` — Enable real APIs in production
-- `DATABASE_URL` — PostgreSQL connection for Railway
+#### Step 1: Connect to Railway
+
+```bash
+# Install Railway CLI
+npm i -g @railway/cli
+
+# Login and create project
+railway login
+railway init
+```
+
+#### Step 2: Set Up PostgreSQL Database
+
+```bash
+# Add PostgreSQL plugin to your Railway project
+railway add postgresql
+
+# Railway automatically injects DATABASE_URL
+```
+
+#### Step 3: Set Environment Variables in Railway Dashboard
+
+In your Railway project settings, add:
+
+```env
+GOOGLE_API_KEY=your_key
+OPENWEATHER_API_KEY=your_key
+RAPID_API_KEY=your_key
+USE_MOCK_DATA=false
+USE_REAL_DATA_DANGEROUS=true
+TZ=America/New_York
+LOG_LEVEL=INFO
+```
+
+#### Step 4: Deploy
+
+```bash
+# Push to Railway (auto-detected from Dockerfile)
+railway up
+
+# Get live URL
+railway open
+```
+
+#### Database Architecture
+
+**Local Development (SQLite):**
+- Lightweight file-based database
+- No configuration needed
+- Stored at `flight_data.db`
+
+**Production (PostgreSQL on Railway):**
+- Auto-provisioned PostgreSQL instance
+- Connection string auto-injected as `DATABASE_URL`
+- Application auto-detects and uses Postgres
+- Persists user feedback for ML calibration
+- Handles concurrent connections
+
+The system automatically:
+- ✅ Detects `DATABASE_URL` environment variable
+- ✅ Switches from SQLite to PostgreSQL in production
+- ✅ Creates schema on first run
+- ✅ Manages connection pooling & timeouts
 
 ---
 
@@ -389,6 +477,27 @@ The included `Dockerfile` handles:
 - C++ with Mersenne Twister RNG: ~50ms per 100k iterations
 - **60x speedup** justifies pybind11 integration complexity
 
+### Why PostgreSQL for Production?
+- Railway provides automatic PostgreSQL provisioning
+- Handles concurrent requests from multiple users
+- Connection pooling & timeout management built-in
+- Persistent storage for feedback loops & model calibration
+- Zero-downtime schema migrations
+
+### Why Normal Distribution for Weather?
+- Weather conditions exhibit **continuous, bell-curve uncertainty** rather than discrete values
+- Normal distribution captures both systematic bias and random variation
+- Volatility parameter allows fine-tuning per condition (Clear has low variance, Thunderstorms have high variance)
+- Mathematically elegant: weather volatility becomes a variance multiplier in traffic modeling
+- More realistic than binary (good/bad) or discrete categorization
+
+### Why PostgreSQL for Production?
+- Railway provides automatic PostgreSQL provisioning
+- Handles concurrent requests from multiple users
+- Connection pooling & timeout management built-in
+- Persistent storage for feedback loops & model calibration
+- Zero-downtime schema migrations
+
 ### Why Not Machine Learning?
 - ML models require historical labeled data (flight delays, actual arrival times)
 - Current system uses first-principles physics (Queue Theory, traffic modeling)
@@ -397,8 +506,8 @@ The included `Dockerfile` handles:
 ### Why Streamlit?
 - Real-time data updates + zero backend infrastructure
 - Interactive widgets (sliders, date pickers) without custom JS
-- Built-in SQLite integration for trip history
-- One-line deployment to Streamlit Cloud
+- Built-in SQLite/PostgreSQL integration for trip history
+- One-line deployment to Streamlit Cloud or Railway
 
 ---
 
@@ -458,8 +567,9 @@ Applied Mathematics & Computer Science | Stony Brook University
 - **TSA Wait Time API** - Historical TSA wait time data
 - **pybind11** — Seamless Python/C++ integration
 - **Streamlit** — Interactive dashboard framework
+- **Railway** — Production deployment infrastructure
 
 ---
 
 **Last Updated:** January 2025  
-**Status:** Production-Ready (Async, Cached, Logged, Tested)
+**Status:** Production-Ready (Async, Cached, Logged, Tested, Railway Deployed)
