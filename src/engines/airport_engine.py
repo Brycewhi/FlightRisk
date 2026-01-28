@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # HIGH-PERFORMANCE IMPORT
 try:
-    import flightrisk_cpp 
+    from tests import flightrisk_cpp 
     USE_CPP = True
 except ImportError:
     from scipy.stats import gamma 
