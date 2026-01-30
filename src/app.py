@@ -244,7 +244,7 @@ with tab_sim:
             st.subheader("📈 Risk Distribution")
             viz = Visualizer()
             st.pyplot(viz.plot_risk_profile(data['dist_data'], data['mins_available'], data['p95_eta']))
-            st.caption(f"⚡ Monte Carlo Latency: {st.session_state['current_duration']:.3f}s")
+            st.caption(f"⚡ Simulation Latency: {st.session_state['current_duration']:.3f}s")
             
         with col_map:
             st.subheader("🗺️ Live Route")
