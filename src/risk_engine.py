@@ -25,7 +25,7 @@ class RiskEngine:
             "Thunderstorm": 0.15, "Snow": 0.20
         }
         self.weights: Dict[str, float] = {
-            "start": 0.15, "mid": 0.25, "end": 0.65
+            "start": 0.15, "mid": 0.20, "end": 0.65
         }
 
     def _triangular_to_normal(self, opt: float, mode: float, pess: float) -> Tuple[float, float]:

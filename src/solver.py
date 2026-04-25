@@ -1,3 +1,4 @@
+import re
 import time
 import asyncio
 import aiohttp
@@ -52,11 +53,9 @@ class Solver:
         drive_time_sec = traffic_metrics['mode'] * 60
         est_arrival = departure_time + drive_time_sec
         
-        # Determine Airport Code
-        target_airport = "JFK" 
-        if "LGA" in destination.upper(): target_airport = "LGA"
-        elif "EWR" in destination.upper(): target_airport = "EWR"
-        elif "LHR" in destination.upper(): target_airport = "LHR"
+        # Determine Airport Code — extract first 3-letter word from destination string
+        iata_match = re.search(r'\b([A-Z]{3})\b', destination.upper())
+        target_airport = iata_match.group(1) if iata_match else "JFK"
 
         airport_task = self.airport.get_total_airport_time(
             session, target_airport, est_arrival, has_bags, is_precheck

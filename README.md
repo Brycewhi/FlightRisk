@@ -1,6 +1,6 @@
-# ✈️ FlightRisk v4.5: High-Frequency Stochastic Travel Intelligence
+# ✈️ FlightRisk: High-Frequency Stochastic Travel Intelligence
 
-**Prediction Engine for Flight Reliability** | **100,000 Monte Carlo Simulations** | **<100ms End-to-End Latency**
+**Prediction Engine for Flight Reliability** | **100,000 Monte Carlo Simulations** | **~2.5s End-to-End | 50ms C++ Kernel**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org)
 [![C++11](https://img.shields.io/badge/C++-11-00599C.svg)](https://isocpp.org/)
@@ -9,7 +9,7 @@
 [![pybind11](https://img.shields.io/badge/Integration-pybind11-yellow.svg)](https://github.com/pybind/pybind11)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-**[🔗 Live Demo] https://flightrisk-production.up.railway.app/** 
+[🔗 **Live Demo**](https://flightrisk-production.up.railway.app/)
 
 ---
 
@@ -29,7 +29,7 @@ FlightRisk predicts **your probability of catching a flight** by:
 2. **Sampling weather along your route** (OpenWeather, 3 corridor points with Normal Distribution modeling)
 3. **Modeling TSA queue dynamics** (Real-time wait times + Queue Theory)
 4. **Running 100,000 Monte Carlo scenarios** in compiled C++
-5. **Returning actionable recommendations** in under 100ms
+5. **Returning actionable recommendations** in ~2.5 seconds (dominated by API calls, not computation)
 
 The system fuses **Queue Theory, Stochastic Modeling, and Async Concurrency** into a logistics prediction engine. It accounts for traffic volatility, terminal congestion, weather impact, and day-of-week seasonality.
 
@@ -129,9 +129,9 @@ The system fuses **Queue Theory, Stochastic Modeling, and Async Concurrency** in
   - Base distribution: `N(mean_condition, volatility²)`
   - Clear weather: volatility = 0.01 (low uncertainty)
   - Rain/Storms: volatility = 0.10-0.20 (high uncertainty)
-- Applies **impact multipliers** (Clear = 1.0x, Thunderstorm = 1.35x)
+- Applies **impact multipliers** (Clear = 1.0x, Drizzle = 1.08x, Fog = 1.15x, Rain = 1.2x, Thunderstorm = 1.35x, Snow = 1.45x)
 - **In-memory caching** to avoid redundant API calls
-- Weighted sampling: destination weather = 65% impact, start = 15%
+- Weighted sampling: destination weather = 65% impact, midpoint = 20%, start = 15%
 
 #### 3. **FlightEngine** (Flight Validation)
 - Fetches real-time flight status via AeroDataBox
@@ -148,7 +148,7 @@ The system fuses **Queue Theory, Stochastic Modeling, and Async Concurrency** in
 
 The **Solver** class coordinates:
 - **Parallel async execution** of all four engines
-- **Binary search** to find optimal departure window (95% success threshold)
+- **Binary search** to find optimal departure window (90% success threshold by default)
 - **Sensitivity analysis** to identify drop-dead times (10% threshold)
 
 ### The Risk Engine (C++ Acceleration)
@@ -177,7 +177,7 @@ The C++ kernel runs **100,000 scenarios** in **~50ms** (vs. 3+ seconds in pure P
 |---------|---------|
 | **100,000 Monte Carlo Simulations** | 95th-percentile guarantees, not averages |
 | **Real-Time Traffic + Weather** | Accounts for live conditions, not just historical averages |
-| **Async Concurrency** | 20+ parallel API calls, <100ms response time |
+| **Async Concurrency** | ~8 parallel API calls, ~2.5s total response time |
 | **C++ Performance Kernel** | 60x speedup over pure Python (50ms vs. 3s) |
 | **Queue Theory** | TSA lines modeled as Gamma distributions (mathematically sound) |
 | **Trip History & Feedback** | PostgreSQL (production) or SQLite (local) persistence for model calibration |
@@ -260,7 +260,7 @@ python src/main.py
    - Start: Clear (volatility = 0.01)
    - Midpoint: Cloudy (volatility = 0.02)
    - Destination: Rain (volatility = 0.10) → **1.2x multiplier applied**
-   - Total weather impact: `0.15 * 1.0 + 0.25 * 1.0 + 0.65 * 1.2 = 1.17x`
+   - Total weather impact: `0.15 * 1.0 + 0.20 * 1.0 + 0.65 * 1.2 = 1.13x`
 
 3. **AirportEngine** estimates:
    - Check-in: 10 minutes (with bags)
@@ -306,8 +306,8 @@ Segment Breakdown:
   - Rain: `N(1.0, 0.10²)` — significant variance
   - Thunderstorm: `N(1.0, 0.15²)` — high variance
   - Snow: `N(1.0, 0.20²)` — maximum variance
-- Multiplier applied as variance expander: `traffic_std *= sqrt(1 + weather_volatility²)`
-- Weighted by location along route (destination = 65%, midpoint = 25%, start = 15%)
+- Multiplier applied as variance expander: `traffic_std = sqrt(traffic_std² + (traffic_mean × volatility)²)`
+- Weighted by location along route (destination = 65%, midpoint = 20%, start = 15%)
 - Models the bell-curve uncertainty in weather conditions rather than discrete values
 
 **TSA Wait Times → Gamma Distribution**
@@ -315,11 +315,6 @@ Segment Breakdown:
 - More realistic than Normal (accounts for long-tail congestion)
 - Parameters calibrated per airport tier + time-of-day
 - Equation: `shape = mean / scale`
-
-**Weather Impact → Multiplicative Model**
-- Clear = 1.0x, Thunderstorm = 1.35x, Snow = 1.45x
-- Applied as variance expander: `traffic_std *= volatility`
-- Weighted by location along route (destination = 65%, start = 15%)
 
 **Async Concurrency → Scatter/Gather Pattern**
 ```python
@@ -491,13 +486,6 @@ The system automatically:
 - Mathematically elegant: weather volatility becomes a variance multiplier in traffic modeling
 - More realistic than binary (good/bad) or discrete categorization
 
-### Why PostgreSQL for Production?
-- Railway provides automatic PostgreSQL provisioning
-- Handles concurrent requests from multiple users
-- Connection pooling & timeout management built-in
-- Persistent storage for feedback loops & model calibration
-- Zero-downtime schema migrations
-
 ### Why Not Machine Learning?
 - ML models require historical labeled data (flight delays, actual arrival times)
 - Current system uses first-principles physics (Queue Theory, traffic modeling)
@@ -571,5 +559,5 @@ Applied Mathematics & Computer Science | Stony Brook University
 
 ---
 
-**Last Updated:** January 2025  
+**Last Updated:** April 2026  
 **Status:** Production-Ready (Async, Cached, Logged, Tested, Railway Deployed)

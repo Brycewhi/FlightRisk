@@ -49,7 +49,7 @@ def validate_config() -> None:
     Raises ValueError if required keys are missing and USE_MOCK_DATA is False.
     """
     if not USE_MOCK_DATA and not USE_REAL_DATA_DANGEROUS:
-        logger.warning("Mock data is enabled. Set USE_MOCK_DATA=false to use real APIs.")
+        logger.warning("USE_MOCK_DATA is false but USE_REAL_DATA_DANGEROUS is also false. Set USE_REAL_DATA_DANGEROUS=true to enable live API calls.")
         return
 
     missing_keys = []
