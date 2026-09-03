@@ -1,6 +1,6 @@
-# ✈️ FlightRisk v4.5: High-Frequency Stochastic Travel Intelligence
+# ✈️ FlightRisk: High-Frequency Stochastic Travel Intelligence
 
-**Prediction Engine for Flight Reliability** | **100,000 Monte Carlo Simulations** | **<100ms End-to-End Latency**
+**Prediction Engine for Flight Reliability** | **100,000 Monte Carlo Simulations** | **~2.5s End-to-End** | **50ms C++ Kernel**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org)
 [![C++11](https://img.shields.io/badge/C++-11-00599C.svg)](https://isocpp.org/)
@@ -9,7 +9,7 @@
 [![pybind11](https://img.shields.io/badge/Integration-pybind11-yellow.svg)](https://github.com/pybind/pybind11)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-**[🔗 Live Demo] https://flightrisk-production.up.railway.app/** 
+**[🔗 Live Demo](https://flightrisk-production.up.railway.app/)**
 
 ---
 
@@ -29,7 +29,7 @@ FlightRisk predicts **your probability of catching a flight** by:
 2. **Sampling weather along your route** (OpenWeather, 3 corridor points with Normal Distribution modeling)
 3. **Modeling TSA queue dynamics** (Real-time wait times + Queue Theory)
 4. **Running 100,000 Monte Carlo scenarios** in compiled C++
-5. **Returning actionable recommendations** in under 100ms
+5. **Returning actionable recommendations** in ~2.5 seconds (dominated by API calls, not computation)
 
 The system fuses **Queue Theory, Stochastic Modeling, and Async Concurrency** into a logistics prediction engine. It accounts for traffic volatility, terminal congestion, weather impact, and day-of-week seasonality.
 
@@ -42,9 +42,9 @@ The system fuses **Queue Theory, Stochastic Modeling, and Async Concurrency** in
 
 **Interactive features:**
 - Real-time risk probability calculation
-- 95% certainty arrival time (worst-case guarantee)
-- Recommended departure time finder
-- Drop-dead time indicator
+- 95% certainty arrival time (the 95th-percentile trip duration, given the recommended departure)
+- Recommended departure time finder (90% success threshold)
+- Drop-dead time indicator (10% success threshold — always later than the recommended departure, since a lower success bar allows a later departure)
 - Route visualization on interactive map
 - Trip segment breakdown (drive, TSA, walk)
 - Weather impact multiplier display
@@ -128,10 +128,10 @@ The system fuses **Queue Theory, Stochastic Modeling, and Async Concurrency** in
 - Models weather uncertainty as a **Normal (Gaussian) Distribution**:
   - Base distribution: `N(mean_condition, volatility²)`
   - Clear weather: volatility = 0.01 (low uncertainty)
-  - Rain/Storms: volatility = 0.10-0.20 (high uncertainty)
-- Applies **impact multipliers** (Clear = 1.0x, Thunderstorm = 1.35x)
+  - Rain/Storms: volatility = 0.10–0.20 (high uncertainty)
+- Applies **impact multipliers** that shift the mean (Clear = 1.0x, Rain = 1.2x, Thunderstorm = 1.35x, Snow = 1.45x)
 - **In-memory caching** to avoid redundant API calls
-- Weighted sampling: destination weather = 65% impact, start = 15%
+- Weighted sampling across the route: **destination = 65%, midpoint = 20%, start = 15%** — applied to both the multiplier (mean shift) and the volatility (spread), since destination conditions matter most but the whole route contributes
 
 #### 3. **FlightEngine** (Flight Validation)
 - Fetches real-time flight status via AeroDataBox
@@ -148,8 +148,9 @@ The system fuses **Queue Theory, Stochastic Modeling, and Async Concurrency** in
 
 The **Solver** class coordinates:
 - **Parallel async execution** of all four engines
-- **Binary search** to find optimal departure window (95% success threshold)
-- **Sensitivity analysis** to identify drop-dead times (10% threshold)
+- **Binary search** to find the optimal departure window (90% success threshold by default) — the latest departure time with a comfortable, safe probability of making the flight
+- **Sensitivity analysis** to identify the drop-dead time (10% success threshold) — the latest departure time with any meaningful chance at all. Since success probability is monotonic in departure time (leaving earlier always helps), the drop-dead time is always *later* than the recommended departure time, not earlier
+- A separate **95th-percentile calculation** on the recommended departure's simulated trip durations, giving the "certainty" arrival time — this is not a search, just a direct read of the 95th-percentile value from that departure time's 100,000 simulated outcomes
 
 ### The Risk Engine (C++ Acceleration)
 
@@ -177,7 +178,7 @@ The C++ kernel runs **100,000 scenarios** in **~50ms** (vs. 3+ seconds in pure P
 |---------|---------|
 | **100,000 Monte Carlo Simulations** | 95th-percentile guarantees, not averages |
 | **Real-Time Traffic + Weather** | Accounts for live conditions, not just historical averages |
-| **Async Concurrency** | 20+ parallel API calls, <100ms response time |
+| **Async Concurrency** | ~8 parallel API calls, ~2.5s total response time |
 | **C++ Performance Kernel** | 60x speedup over pure Python (50ms vs. 3s) |
 | **Queue Theory** | TSA lines modeled as Gamma distributions (mathematically sound) |
 | **Trip History & Feedback** | PostgreSQL (production) or SQLite (local) persistence for model calibration |
@@ -260,7 +261,7 @@ python src/main.py
    - Start: Clear (volatility = 0.01)
    - Midpoint: Cloudy (volatility = 0.02)
    - Destination: Rain (volatility = 0.10) → **1.2x multiplier applied**
-   - Total weather impact: `0.15 * 1.0 + 0.25 * 1.0 + 0.65 * 1.2 = 1.17x`
+   - Weighted multiplier: `0.15×1.0 + 0.20×1.0 + 0.65×1.2 = 1.13x`
 
 3. **AirportEngine** estimates:
    - Check-in: 10 minutes (with bags)
@@ -268,25 +269,27 @@ python src/main.py
    - Terminal Walk: 8 minutes
 
 4. **C++ Kernel** runs 100,000 scenarios:
-   - Traffic: Normal(54, 9.6) [45 min mean × 1.2 weather multiplier]
+   - Traffic: Normal(50.85, ...) [45 min mean × 1.13 weighted weather multiplier]
    - TSA: Gamma(7.1, 4.2) [binned by airport tier + time-of-day]
    - Total Trip Time: Traffic + TSA + Walk
-   - **Success Rate:** 91% (make gate before 4:45 PM)
+   - **Success Rate at 2:00 PM departure:** 91% (make gate before 4:45 PM)
 
 ### Output
 
 ```
-✅ SAFE: 91% Probability of Making Your Flight
+✅ SAFE: 91% Probability of Making Your Flight (if leaving at 2:00 PM)
 
-Recommended Departure:   2:00 PM
-95% Certainty Arrival:   4:12 PM (33 min buffer)
-Drop-Dead Time:          1:15 PM (< 10% chance if later)
+Recommended Departure:   2:00 PM   (90% success threshold)
+95% Certainty Arrival:   4:12 PM   (33 min buffer before gate closes)
+Drop-Dead Time:          2:35 PM   (< 10% chance if later than this)
 
 Segment Breakdown:
   Drive:  45 min (worst-case 65 min)
   TSA:    25 min (worst-case 40 min)
   Walk:   8 min
 ```
+
+*Note: Drop-Dead (2:35 PM) is later than Recommended Departure (2:00 PM) — this is expected. A lower success bar (10%) allows a later departure than a higher one (90%), since success probability is monotonic in departure time.*
 
 ---
 
@@ -297,17 +300,17 @@ Segment Breakdown:
 **Traffic → Triangular Distribution**
 - Google Maps returns three scenarios: optimistic, best_guess, pessimistic
 - Approximated as a Triangular distribution: optimal fit for bounded forecasts
-- Volatility adjusted by weather condition (rain = +10%, snow = +20%)
 
 **Weather Impact → Normal Distribution + Multiplicative Model**
 - Weather conditions modeled as **Normal (Gaussian) Distribution** with condition-specific volatility:
-  - Clear: `N(1.0, 0.01²)` — minimal variance
-  - Clouds: `N(1.0, 0.02²)` — slight variance
-  - Rain: `N(1.0, 0.10²)` — significant variance
-  - Thunderstorm: `N(1.0, 0.15²)` — high variance
-  - Snow: `N(1.0, 0.20²)` — maximum variance
-- Multiplier applied as variance expander: `traffic_std *= sqrt(1 + weather_volatility²)`
-- Weighted by location along route (destination = 65%, midpoint = 25%, start = 15%)
+  - Clear: volatility = 0.01 — minimal variance
+  - Clouds: volatility = 0.02 — slight variance
+  - Rain: volatility = 0.10 — significant variance
+  - Thunderstorm: volatility = 0.15 — high variance
+  - Snow: volatility = 0.20 — maximum variance
+- Impact multipliers shift the mean: Clear = 1.0x, Drizzle = 1.08x, Fog = 1.15x, Rain = 1.2x, Thunderstorm = 1.35x, Snow = 1.45x
+- Multiplier applied as a variance expander on top of the mean shift: `traffic_std = sqrt(traffic_std² + (traffic_mean × volatility)²)`
+- Both the multiplier and the volatility are **weighted averages** across three route points: destination = 65%, midpoint = 20%, start = 15%
 - Models the bell-curve uncertainty in weather conditions rather than discrete values
 
 **TSA Wait Times → Gamma Distribution**
@@ -315,11 +318,6 @@ Segment Breakdown:
 - More realistic than Normal (accounts for long-tail congestion)
 - Parameters calibrated per airport tier + time-of-day
 - Equation: `shape = mean / scale`
-
-**Weather Impact → Multiplicative Model**
-- Clear = 1.0x, Thunderstorm = 1.35x, Snow = 1.45x
-- Applied as variance expander: `traffic_std *= volatility`
-- Weighted by location along route (destination = 65%, start = 15%)
 
 **Async Concurrency → Scatter/Gather Pattern**
 ```python
@@ -330,8 +328,8 @@ results = await asyncio.gather(
     airport_task
 )
 ```
-- All independent API calls fire in parallel
-- Total latency = longest single call (~2.5s), not sum of all calls
+- All independent API calls (~8 total: 3 traffic models, 3 weather points, flight status, TSA) fire in parallel
+- Total latency = longest single call (~2.5s), not the sum of all calls
 
 ### Performance Benchmarks
 
@@ -468,7 +466,7 @@ The system automatically:
 ## 🎓 Key Technical Decisions
 
 ### Why AsyncIO?
-- 20+ API calls (Traffic, Weather, Flight, Airport) are I/O-bound
+- ~8 API calls (Traffic, Weather, Flight, Airport) are I/O-bound
 - Sequential calls = 8+ seconds; parallel calls = ~2.5 seconds
 - aiohttp allows true parallelism with lightweight coroutines
 
@@ -488,15 +486,8 @@ The system automatically:
 - Weather conditions exhibit **continuous, bell-curve uncertainty** rather than discrete values
 - Normal distribution captures both systematic bias and random variation
 - Volatility parameter allows fine-tuning per condition (Clear has low variance, Thunderstorms have high variance)
-- Mathematically elegant: weather volatility becomes a variance multiplier in traffic modeling
+- Mathematically elegant: weather volatility becomes a variance expander in traffic modeling
 - More realistic than binary (good/bad) or discrete categorization
-
-### Why PostgreSQL for Production?
-- Railway provides automatic PostgreSQL provisioning
-- Handles concurrent requests from multiple users
-- Connection pooling & timeout management built-in
-- Persistent storage for feedback loops & model calibration
-- Zero-downtime schema migrations
 
 ### Why Not Machine Learning?
 - ML models require historical labeled data (flight delays, actual arrival times)
@@ -552,10 +543,10 @@ MIT License — See [LICENSE](LICENSE) for details.
 
 ## 👤 Author
 
-**Bryce Whiteside**  
+**Bryce Whiteside**
 Applied Mathematics & Computer Science | Stony Brook University
 
-[GitHub](https://github.com/Brycewhi) 
+[GitHub](https://github.com/Brycewhi)
 
 ---
 
@@ -571,5 +562,5 @@ Applied Mathematics & Computer Science | Stony Brook University
 
 ---
 
-**Last Updated:** January 2025  
+**Last Updated:** September 2026
 **Status:** Production-Ready (Async, Cached, Logged, Tested, Railway Deployed)
