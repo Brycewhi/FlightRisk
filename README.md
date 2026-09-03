@@ -1,10 +1,6 @@
 # ✈️ FlightRisk: High-Frequency Stochastic Travel Intelligence
 
-<<<<<<< HEAD
 **Prediction Engine for Flight Reliability** | **100,000 Monte Carlo Simulations** | **~2.5s End-to-End** | **50ms C++ Kernel**
-=======
-**Prediction Engine for Flight Reliability** | **100,000 Monte Carlo Simulations** | **~2.5s End-to-End | 50ms C++ Kernel**
->>>>>>> c9a7cc66de56e0288e75eb74e62a3cfb4d158dc4
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org)
 [![C++11](https://img.shields.io/badge/C++-11-00599C.svg)](https://isocpp.org/)
@@ -13,11 +9,7 @@
 [![pybind11](https://img.shields.io/badge/Integration-pybind11-yellow.svg)](https://github.com/pybind/pybind11)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-<<<<<<< HEAD
 **[🔗 Live Demo](https://flightrisk-production.up.railway.app/)**
-=======
-[🔗 **Live Demo**](https://flightrisk-production.up.railway.app/)
->>>>>>> c9a7cc66de56e0288e75eb74e62a3cfb4d158dc4
 
 ---
 
@@ -136,17 +128,10 @@ The system fuses **Queue Theory, Stochastic Modeling, and Async Concurrency** in
 - Models weather uncertainty as a **Normal (Gaussian) Distribution**:
   - Base distribution: `N(mean_condition, volatility²)`
   - Clear weather: volatility = 0.01 (low uncertainty)
-<<<<<<< HEAD
   - Rain/Storms: volatility = 0.10–0.20 (high uncertainty)
 - Applies **impact multipliers** that shift the mean (Clear = 1.0x, Rain = 1.2x, Thunderstorm = 1.35x, Snow = 1.45x)
 - **In-memory caching** to avoid redundant API calls
 - Weighted sampling across the route: **destination = 65%, midpoint = 20%, start = 15%** — applied to both the multiplier (mean shift) and the volatility (spread), since destination conditions matter most but the whole route contributes
-=======
-  - Rain/Storms: volatility = 0.10-0.20 (high uncertainty)
-- Applies **impact multipliers** (Clear = 1.0x, Drizzle = 1.08x, Fog = 1.15x, Rain = 1.2x, Thunderstorm = 1.35x, Snow = 1.45x)
-- **In-memory caching** to avoid redundant API calls
-- Weighted sampling: destination weather = 65% impact, midpoint = 20%, start = 15%
->>>>>>> c9a7cc66de56e0288e75eb74e62a3cfb4d158dc4
 
 #### 3. **FlightEngine** (Flight Validation)
 - Fetches real-time flight status via AeroDataBox
@@ -163,14 +148,9 @@ The system fuses **Queue Theory, Stochastic Modeling, and Async Concurrency** in
 
 The **Solver** class coordinates:
 - **Parallel async execution** of all four engines
-<<<<<<< HEAD
 - **Binary search** to find the optimal departure window (90% success threshold by default) — the latest departure time with a comfortable, safe probability of making the flight
 - **Sensitivity analysis** to identify the drop-dead time (10% success threshold) — the latest departure time with any meaningful chance at all. Since success probability is monotonic in departure time (leaving earlier always helps), the drop-dead time is always *later* than the recommended departure time, not earlier
 - A separate **95th-percentile calculation** on the recommended departure's simulated trip durations, giving the "certainty" arrival time — this is not a search, just a direct read of the 95th-percentile value from that departure time's 100,000 simulated outcomes
-=======
-- **Binary search** to find optimal departure window (90% success threshold by default)
-- **Sensitivity analysis** to identify drop-dead times (10% threshold)
->>>>>>> c9a7cc66de56e0288e75eb74e62a3cfb4d158dc4
 
 ### The Risk Engine (C++ Acceleration)
 
@@ -281,11 +261,7 @@ python src/main.py
    - Start: Clear (volatility = 0.01)
    - Midpoint: Cloudy (volatility = 0.02)
    - Destination: Rain (volatility = 0.10) → **1.2x multiplier applied**
-<<<<<<< HEAD
    - Weighted multiplier: `0.15×1.0 + 0.20×1.0 + 0.65×1.2 = 1.13x`
-=======
-   - Total weather impact: `0.15 * 1.0 + 0.20 * 1.0 + 0.65 * 1.2 = 1.13x`
->>>>>>> c9a7cc66de56e0288e75eb74e62a3cfb4d158dc4
 
 3. **AirportEngine** estimates:
    - Check-in: 10 minutes (with bags)
@@ -327,7 +303,6 @@ Segment Breakdown:
 
 **Weather Impact → Normal Distribution + Multiplicative Model**
 - Weather conditions modeled as **Normal (Gaussian) Distribution** with condition-specific volatility:
-<<<<<<< HEAD
   - Clear: volatility = 0.01 — minimal variance
   - Clouds: volatility = 0.02 — slight variance
   - Rain: volatility = 0.10 — significant variance
@@ -336,15 +311,6 @@ Segment Breakdown:
 - Impact multipliers shift the mean: Clear = 1.0x, Drizzle = 1.08x, Fog = 1.15x, Rain = 1.2x, Thunderstorm = 1.35x, Snow = 1.45x
 - Multiplier applied as a variance expander on top of the mean shift: `traffic_std = sqrt(traffic_std² + (traffic_mean × volatility)²)`
 - Both the multiplier and the volatility are **weighted averages** across three route points: destination = 65%, midpoint = 20%, start = 15%
-=======
-  - Clear: `N(1.0, 0.01²)` — minimal variance
-  - Clouds: `N(1.0, 0.02²)` — slight variance
-  - Rain: `N(1.0, 0.10²)` — significant variance
-  - Thunderstorm: `N(1.0, 0.15²)` — high variance
-  - Snow: `N(1.0, 0.20²)` — maximum variance
-- Multiplier applied as variance expander: `traffic_std = sqrt(traffic_std² + (traffic_mean × volatility)²)`
-- Weighted by location along route (destination = 65%, midpoint = 20%, start = 15%)
->>>>>>> c9a7cc66de56e0288e75eb74e62a3cfb4d158dc4
 - Models the bell-curve uncertainty in weather conditions rather than discrete values
 
 **TSA Wait Times → Gamma Distribution**
@@ -596,9 +562,5 @@ Applied Mathematics & Computer Science | Stony Brook University
 
 ---
 
-<<<<<<< HEAD
 **Last Updated:** September 2026
-=======
-**Last Updated:** April 2026  
->>>>>>> c9a7cc66de56e0288e75eb74e62a3cfb4d158dc4
 **Status:** Production-Ready (Async, Cached, Logged, Tested, Railway Deployed)
